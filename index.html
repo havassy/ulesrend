@@ -1,10 +1,1259 @@
 <!DOCTYPE html>
-<html>
+<html lang="hu">
 <head>
-    <title>Az én első weboldalam</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ülésrend szervező</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 40px;
+            font-weight: 300;
+            font-size: 2.2rem;
+        }
+
+        h2 {
+            color: #2c3e50;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 12px;
+            margin-bottom: 24px;
+            font-weight: 400;
+            font-size: 1.4rem;
+        }
+
+        .upload-area {
+            border: 2px dashed #3498db;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            background-color: #f8f9fa;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-area:hover {
+            border-color: #2980b9;
+            background-color: #e3f2fd;
+        }
+
+        .upload-area p {
+            color: #7f8c8d;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 4px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .btn:hover {
+            background-color: #2980b9;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background-color: #1abc9c;
+        }
+
+        .btn-secondary:hover {
+            background-color: #16a085;
+        }
+
+        .btn-success {
+            background-color: #27ae60;
+        }
+
+        .btn-success:hover {
+            background-color: #219653;
+        }
+
+        .btn-warning {
+            background-color: #f39c12;
+        }
+
+        .btn-warning:hover {
+            background-color: #e67e22;
+        }
+
+        .btn-danger {
+            background-color: #e74c3c;
+        }
+
+        .btn-danger:hover {
+            background-color: #c0392b;
+        }
+
+        .btn-mirror {
+            background-color: #9b59b6;
+        }
+
+        .btn-mirror:hover {
+            background-color: #8e44ad;
+        }
+
+        .btn-mirror.active {
+            background-color: #8e44ad;
+            box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
+        }
+
+        .seating-chart {
+            margin: 24px 0;
+            overflow-x: auto;
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .seating-table {
+            border-collapse: separate;
+            border-spacing: 4px;
+            margin: 0 auto;
+            background: transparent;
+        }
+
+        .seat-cell {
+            width: 80px;
+            height: 60px;
+            border: 2px solid #3498db;
+            text-align: center;
+            vertical-align: middle;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            background: white;
+            color: #333;
+            border-radius: 8px;
+        }
+
+        .seat-cell:hover {
+            background-color: #e3f2fd;
+            border-color: #2980b9;
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.2);
+        }
+
+        .seat-cell.occupied {
+            background-color: white;
+            border-color: #27ae60;
+            color: #2c3e50;
+        }
+
+        .seat-cell.absent {
+            background-color: #ffebee;
+            border-color: #e74c3c;
+            opacity: 0.8;
+            color: #e74c3c;
+        }
+
+        .seat-cell.empty {
+            background-color: #f8f9fa;
+            border: 2px dashed #95a5a6;
+            color: #7f8c8d;
+        }
+
+        .corridor-cell {
+            width: 60px;
+            height: 60px;
+            border: 2px solid #bdc3c7;
+            background: linear-gradient(135deg, #ecf0f1 0%, #d5dbdb 100%);
+            position: relative;
+            border-radius: 8px;
+        }
+
+        .corridor-cell::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 3px;
+            background: #7f8c8d;
+            border-radius: 2px;
+        }
+
+        .controls {
+            text-align: center;
+            margin: 24px 0;
+        }
+
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid;
+            font-size: 16px;
+        }
+
+        .status.info {
+            background-color: #e8f4f8;
+            color: #2c3e50;
+            border-left-color: #3498db;
+        }
+
+        .status.success {
+            background-color: #d5f4e6;
+            color: #27ae60;
+            border-left-color: #27ae60;
+            font-weight: bold;
+        }
+
+        .status.error {
+            background-color: #fdf2f2;
+            color: #e74c3c;
+            border-left-color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 24px;
+            margin: 24px 0;
+            font-size: 16px;
+            font-weight: 500;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-color {
+            width: 24px;
+            height: 24px;
+            border: 2px solid;
+            border-radius: 4px;
+        }
+
+        .projection-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: white;
+            color: #333;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .projection-controls {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .projection-close {
+            position: absolute;
+            bottom: 20px;
+            right: 50%;
+            transform: translateX(50%);
+            padding: 12px 20px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            transition: all 0.3s ease;
+        }
+
+        .projection-close:hover {
+            background-color: #c0392b;
+            transform: translateX(50%) translateY(-2px);
+        }
+
+        .projection-title {
+            font-size: 3vw;
+            margin-bottom: 0.5vh;
+            text-align: center;
+            font-weight: 300;
+            color: #2c3e50;
+        }
+
+        .projection-subtitle {
+            font-size: 1.6vw;
+            margin-bottom: 1.2vh;
+            text-align: center;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+
+        .projection-table {
+            border-collapse: separate;
+            border-spacing: 0.4vw;
+            margin: 0 auto;
+            transition: transform 0.3s ease;
+            background-color: #f9f9f9;
+            padding: 1.2vw;
+            border-radius: 0.6vw;
+            transform: scale(0.95);
+            margin-top: 2vh;
+        }
+
+        .projection-table.mirrored {
+            transform: scale(0.95) rotate(180deg);
+        }
+
+        .projection-table.mirrored .projection-seat {
+            transform: rotate(180deg);
+        }
+
+        .projection-table.mirrored .projection-corridor::before {
+            transform: translate(-50%, -50%) rotate(180deg);
+        }
+
+        .projection-seat {
+            width: 9.5vw;
+            height: 6vh;
+            font-size: 1.8vw;
+            font-weight: 600;
+            text-align: center;
+            vertical-align: middle;
+            border: 2px solid #3498db;
+            border-radius: 0.6vw;
+            transition: all 0.3s ease;
+            padding: 0.2vh;
+            line-height: 1.2;
+        }
+
+        .projection-seat.occupied {
+            background: white;
+            color: #2c3e50;
+            border-color: #27ae60;
+        }
+
+        .projection-seat.empty {
+            background: #f8f9fa;
+            color: #7f8c8d;
+            border: 2px dashed #95a5a6;
+        }
+
+        .projection-corridor {
+            width: 6vw;
+            height: 6vh;
+            border: 2px solid #bdc3c7;
+            background: linear-gradient(135deg, #ecf0f1 0%, #d5dbdb 100%);
+            border-radius: 0.4vw;
+            position: relative;
+        }
+
+        .projection-corridor::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 3vw;
+            height: 0.4vh;
+            background: #7f8c8d;
+            border-radius: 0.2vh;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+            }
+            
+            .container {
+                padding: 20px;
+            }
+            
+            .seat-cell {
+                width: 60px;
+                height: 45px;
+                font-size: 14px;
+            }
+            
+            .seating-table {
+                border-spacing: 2px;
+            }
+            
+            .btn {
+                width: 100%;
+                margin: 8px 0;
+            }
+            
+            .legend {
+                flex-direction: column;
+                gap: 12px;
+            }
+            
+            .projection-controls {
+                top: 10px;
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .projection-close {
+                bottom: 10px;
+                padding: 10px 16px;
+                font-size: 14px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 15px;
+            }
+            
+            h1 {
+                font-size: 1.8rem;
+            }
+            
+            h2 {
+                font-size: 1.2rem;
+            }
+            
+            .upload-area {
+                padding: 20px;
+            }
+            
+            .upload-area p {
+                font-size: 16px;
+            }
+        }
+    </style>
 </head>
 <body>
-    <h1>Helló világ!</h1>
-    <p>Ez az én első GitHub weboldam.</p>
+    <div class="container">
+        <h1>Ülésrend szervező</h1>
+
+        <section>
+            <h2>1. Excel fájl fel- és letöltése</h2>
+            <div class="upload-area" id="uploadArea">
+                <p>Húzza ide az Excel fájlt vagy kattintson a tallózáshoz</p>
+                <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;">
+                <div style="margin: 10px 0;">
+                    <button class="btn" onclick="document.getElementById('fileInput').click()">Excel feltöltése</button>
+                    <button class="btn btn-secondary" onclick="loadTestData()">Próba ülésrend</button>
+                    <button class="btn" onclick="downloadTemplate()" style="background-color: #9b59b6; border-color: #9b59b6;" onmouseover="this.style.backgroundColor='#8e44ad'; this.style.borderColor='#8e44ad'" onmouseout="this.style.backgroundColor='#9b59b6'; this.style.borderColor='#9b59b6'">Minta Excel letöltése</button>
+                </div>
+            </div>
+            <div id="fileStatus" class="status info" style="display: none;"></div>
+        </section>
+
+        <section id="currentSeatingSection" style="display: none;">
+            <h2>2. Eredeti ülésrend - Jelölje meg a hiányzókat</h2>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: white; border-color: #27ae60;"></div>
+                    <span>Jelen van</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #ffebee; border-color: #e74c3c;"></div>
+                    <span>Hiányzik</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #f8f9fa; border-color: #95a5a6; border-style: dashed;"></div>
+                    <span>Üres hely</span>
+                </div>
+            </div>
+            <div class="seating-chart">
+                <table class="seating-table" id="currentSeating"></table>
+            </div>
+            <div class="controls">
+                <button class="btn btn-danger" onclick="resetAbsent()">Hiányzók visszaállítása</button>
+                <button class="btn btn-warning" onclick="openCurrentProjection()">Eredeti ülésrend vetítése</button>
+                <button class="btn btn-success" onclick="generateNewSeating()">Új ülésrend generálása</button>
+            </div>
+            <div id="studentCount" class="status info"></div>
+        </section>
+
+        <section id="newSeatingSection" style="display: none;">
+            <h2>3. Új ülésrend</h2>
+            <div class="controls">
+                <button class="btn" onclick="downloadData()">Letöltés</button>
+                <button class="btn btn-warning" onclick="openProjection()">Vetítés</button>
+                <button class="btn btn-success" onclick="generateNewSeating()">Újra generálás</button>
+            </div>
+            <div class="seating-chart">
+                <table class="seating-table" id="newSeating"></table>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // Globális változók
+        let originalData = null;
+        let currentStudents = [];
+        let absentStudentNames = new Set();
+        let newArrangement = null;
+        let isMirrored = false;
+
+        const SEATING_STRUCTURE = [
+            [{col: 'A', row: 1}, {col: 'B', row: 1}, {gap: true}, {col: 'D', row: 1}, {col: 'E', row: 1}, {col: 'F', row: 1}, {gap: true}, {col: 'H', row: 1}, {col: 'I', row: 1}],
+            [],
+            [{col: 'A', row: 3}, {col: 'B', row: 3}, {gap: true}, {col: 'D', row: 3}, {col: 'E', row: 3}, {col: 'F', row: 3}, {gap: true}, {col: 'H', row: 3}, {col: 'I', row: 3}],
+            [],
+            [{col: 'A', row: 5}, {col: 'B', row: 5}, {gap: true}, {col: 'D', row: 5}, {col: 'E', row: 5}, {col: 'F', row: 5}, {gap: true}, {col: 'H', row: 5}, {col: 'I', row: 5}],
+            [],
+            [{col: 'A', row: 7}, {col: 'B', row: 7}, {gap: true}, {col: 'D', row: 7}, {col: 'E', row: 7}, {col: 'F', row: 7}, {gap: true}, {col: 'H', row: 7}, {col: 'I', row: 7}],
+            [],
+            [{col: 'A', row: 9}, {col: 'B', row: 9}, {gap: true}, {col: 'D', row: 9}, {col: 'E', row: 9}, {col: 'F', row: 9}, {gap: true}, {col: 'H', row: 9}, {col: 'I', row: 9}]
+        ];
+
+        // Event listeners
+        document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+        
+        const uploadArea = document.getElementById('uploadArea');
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#2980b9';
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.borderColor = '#3498db';
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#3498db';
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        function loadTestData() {
+            originalData = {
+                'A1': 'Fénylak Zara', 'B1': 'Viharszem Kael', 'D1': 'Csillagvető Luna', 'E1': 'Árnyékfog Drix', 'F1': 'Holdfény Nyxa',
+                'H1': 'Kristályhang Zylo', 'I1': 'Napvirág Vera', 'A3': 'Égboltkék Jinx', 'B3': 'Vaspenge Roku', 'D3': 'Tengerzöld Saia',
+                'E3': 'Szélroham Vex', 'F3': 'Ködfátyol Mira', 'H3': 'Vöröskő Axel', 'I3': 'Ezüstszárny Nyx', 'A5': 'Földmozgás Zion',
+                'B5': 'Jégcsík Kai', 'D5': 'Aranyparáz Lyra', 'E5': 'Vasököl Rex', 'F5': 'Rózsabimbó Aria', 'H5': 'Óceánmély Zen',
+                'I5': 'Lángvető Nova', 'A7': 'Sólyomszem Oryx', 'B7': 'Zöldhullám Sage', 'D7': 'Tűzpatak Blaze', 'E7': 'Suttogás Echo',
+                'F7': 'Szivárványhíd Iris', 'H7': 'Villámcsapás Storm', 'I7': 'Hajnalpír Dawn', 'A9': 'Időáramlás Flux', 'B9': 'Éjszárny Raven'
+            };
+            
+            const processResult = processOriginalData();
+            if (processResult !== false) {
+                showFileStatus('Próba ülésrend betöltve: ' + Object.keys(originalData).length + ' tanuló', 'success');
+                document.getElementById('currentSeatingSection').style.display = 'block';
+            }
+        }
+
+        function downloadTemplate() {
+            try {
+                // Minta adatok létrehozása - csak nevek, nincs folyosó szöveg
+                const templateData = {
+                    'A1': 'Név 1', 'B1': 'Név 2', 'D1': 'Név 3', 'E1': 'Név 4', 'F1': 'Név 5',
+                    'H1': 'Név 6', 'I1': 'Név 7', 'A3': 'Név 8', 'B3': 'Név 9', 'D3': 'Név 10',
+                    'E3': 'Név 11', 'F3': 'Név 12', 'H3': 'Név 13', 'I3': 'Név 14', 'A5': 'Név 15',
+                    'B5': 'Név 16', 'D5': 'Név 17', 'E5': 'Név 18', 'F5': 'Név 19', 'H5': 'Név 20',
+                    'I5': 'Név 21', 'A7': 'Név 22', 'B7': 'Név 23', 'D7': 'Név 24', 'E7': 'Név 25',
+                    'F7': 'Név 26', 'H7': 'Név 27', 'I7': 'Név 28', 'A9': 'Név 29', 'B9': 'Név 30',
+                    'D9': 'Név 31', 'E9': 'Név 32', 'F9': 'Név 33', 'H9': 'Név 34', 'I9': 'Név 35'
+                };
+
+                // Excel munkafüzet létrehozása
+                const wb = XLSX.utils.book_new();
+                const ws = {};
+                
+                // Adatok beillesztése
+                for (const cellRef in templateData) {
+                    ws[cellRef] = { v: templateData[cellRef], t: 's' };
+                }
+                
+                // Tartomány beállítása
+                const range = XLSX.utils.decode_range('A1:I9');
+                ws['!ref'] = XLSX.utils.encode_range(range);
+                
+                // Oszlopszélességek beállítása
+                ws['!cols'] = [
+                    {width: 15}, {width: 15}, {width: 8}, {width: 15}, {width: 15},
+                    {width: 15}, {width: 8}, {width: 15}, {width: 15}
+                ];
+                
+                // Munkalap hozzáadása
+                XLSX.utils.book_append_sheet(wb, ws, "Ülésrend");
+                
+                // Excel fájl letöltése
+                XLSX.writeFile(wb, 'ulesrend_minta.xlsx');
+                showFileStatus('Minta Excel fájl letöltve: ulesrend_minta.xlsx', 'success');
+                
+            } catch (error) {
+                showFileStatus('Hiba a minta letöltésekor: ' + error.message, 'error');
+            }
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        }
+
+        function handleFile(file) {
+            if (!file.name.match(/\.(xlsx|xls)$/)) {
+                showFileStatus('Csak Excel fájlokat (.xlsx, .xls) lehet feltölteni', 'error');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    if (!workbook.SheetNames.length) {
+                        throw new Error('A fájl nem tartalmaz munkalapokat');
+                    }
+                    
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    originalData = {};
+                    
+                    for (let row = 1; row <= 9; row++) {
+                        for (const col of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']) {
+                            const cellRef = col + row;
+                            const cell = sheet[cellRef];
+                            if (cell && cell.v && String(cell.v).trim()) {
+                                originalData[cellRef] = String(cell.v).trim();
+                            }
+                        }
+                    }
+
+                    if (Object.keys(originalData).length === 0) {
+                        throw new Error('Nincs adat az A1-I9 tartományban');
+                    }
+
+                    // processOriginalData() meghívása és eredményének ellenőrzése
+                    const processResult = processOriginalData();
+                    
+                    // Ha a processOriginalData() false-t ad vissza (duplikátum hiba), ne folytassuk
+                    if (processResult === false) {
+                        return;
+                    }
+                    
+                    showFileStatus('Fájl betöltve: ' + Object.keys(originalData).length + ' tanuló', 'success');
+                    document.getElementById('currentSeatingSection').style.display = 'block';
+                    
+                } catch (error) {
+                    showFileStatus('Hiba: ' + error.message, 'error');
+                }
+            };
+            
+            reader.onerror = () => showFileStatus('Fájl olvasási hiba', 'error');
+            reader.readAsArrayBuffer(file);
+        }
+
+        function showFileStatus(message, type) {
+            const status = document.getElementById('fileStatus');
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+        }
+
+        function processOriginalData() {
+            currentStudents = [];
+            absentStudentNames.clear();
+            
+            // DUPLIKÁTUM ELLENŐRZÉS
+            const nameCount = {};
+            
+            // Számoljuk meg a neveket
+            for (const cellRef in originalData) {
+                const studentName = originalData[cellRef];
+                if (studentName && studentName.trim()) {
+                    const name = studentName.trim();
+                    nameCount[name] = (nameCount[name] || 0) + 1;
+                }
+            }
+            
+            // Keressük meg a duplikátumokat
+            const duplicates = [];
+            for (const name in nameCount) {
+                if (nameCount[name] > 1) {
+                    duplicates.push(`"${name}" (${nameCount[name]}x)`);
+                }
+            }
+            
+            // Ha van duplikátum, állítsuk meg a betöltést
+            if (duplicates.length > 0) {
+                const errorMessage = 'FIGYELEM: Azonos nevek találhatók!\n\n' + 
+                    duplicates.join('\n') + 
+                    '\n\nKérem, módosítsa a neveket egyedivé a hibamentes működés érdekében.';
+                
+                alert(errorMessage);
+                showFileStatus(errorMessage, 'error');
+                console.error('Duplikátum hiba:', duplicates);
+                
+                // Ne folytassuk a betöltést, térjünk vissza false értékkel
+                return false;
+            }
+            
+            // Ha nincs duplikátum, folytatjuk a betöltést
+            SEATING_STRUCTURE.forEach(row => {
+                row.forEach(seat => {
+                    if (!seat.gap) {
+                        const cellRef = seat.col + seat.row;
+                        const studentName = originalData[cellRef];
+                        if (studentName) {
+                            currentStudents.push({
+                                name: studentName,
+                                originalPosition: cellRef,
+                                col: seat.col,
+                                row: seat.row
+                            });
+                        }
+                    }
+                });
+            });
+
+            displayCurrentSeating();
+            updateStudentCount();
+            
+            // Sikeres betöltés
+            return true;
+        }
+
+        function displayCurrentSeating() {
+            const table = document.getElementById('currentSeating');
+            table.innerHTML = '';
+
+            SEATING_STRUCTURE.forEach(row => {
+                const tr = document.createElement('tr');
+                
+                if (row.length === 0) {
+                    const td = document.createElement('td');
+                    td.colSpan = 9;
+                    td.style.height = '20px';
+                    td.style.border = 'none';
+                    td.style.background = 'transparent';
+                    tr.appendChild(td);
+                } else {
+                    row.forEach(seat => {
+                        const td = document.createElement('td');
+                        
+                        if (seat.gap) {
+                            td.className = 'corridor-cell';
+                        } else {
+                            const student = currentStudents.find(s => s.col === seat.col && s.row === seat.row);
+                            const cellRef = seat.col + seat.row;
+                            
+                            td.className = 'seat-cell';
+                            td.onclick = () => toggleAbsent(cellRef);
+                            
+                            if (student) {
+                                td.textContent = student.name;
+                                if (absentStudentNames.has(student.name)) {
+                                    td.classList.add('absent');
+                                } else {
+                                    td.classList.add('occupied');
+                                }
+                            } else {
+                                td.textContent = '';
+                                td.classList.add('empty');
+                            }
+                        }
+                        
+                        tr.appendChild(td);
+                    });
+                }
+                
+                table.appendChild(tr);
+            });
+        }
+
+        function toggleAbsent(cellRef) {
+            const student = currentStudents.find(s => s.originalPosition === cellRef);
+            if (!student) return;
+
+            if (absentStudentNames.has(student.name)) {
+                absentStudentNames.delete(student.name);
+            } else {
+                absentStudentNames.add(student.name);
+            }
+            
+            displayCurrentSeating();
+            if (newArrangement) {
+                displayNewSeating();
+            }
+            updateStudentCount();
+        }
+
+        function resetAbsent() {
+            absentStudentNames.clear();
+            displayCurrentSeating();
+            if (newArrangement) {
+                displayNewSeating();
+            }
+            updateStudentCount();
+        }
+
+        function updateStudentCount() {
+            const present = currentStudents.length - absentStudentNames.size;
+            const absent = absentStudentNames.size;
+            document.getElementById('studentCount').textContent = 
+                `Jelenlévő: ${present}, Hiányzó: ${absent}, Összesen: ${currentStudents.length}`;
+        }
+
+        function generateNewSeating() {
+            const presentStudents = currentStudents.filter(s => !absentStudentNames.has(s.name));
+            
+            if (presentStudents.length === 0) {
+                alert('Nincsenek jelenlévő diákok!');
+                return;
+            }
+
+            const shuffled = [...presentStudents].sort(() => Math.random() - 0.5);
+            newArrangement = {};
+            
+            const pairSeats = [
+                ['A1','B1'], ['H1','I1'], ['A3','B3'], ['H3','I3'], 
+                ['A5','B5'], ['H5','I5'], ['A7','B7'], ['H7','I7'], 
+                ['A9','B9'], ['H9','I9']
+            ];
+            const tripleSeats = [
+                ['D1','E1','F1'], ['D3','E3','F3'], ['D5','E5','F5'], 
+                ['D7','E7','F7'], ['D9','E9','F9']
+            ];
+
+            const totalStudents = shuffled.length;
+            let studentIdx = 0;
+            
+            if (totalStudents % 2 === 1) {
+                newArrangement[tripleSeats[0][0]] = shuffled[studentIdx++];
+                newArrangement[tripleSeats[0][1]] = shuffled[studentIdx++];
+                newArrangement[tripleSeats[0][2]] = shuffled[studentIdx++];
+                
+                let pairIdx = 0;
+                while (studentIdx + 1 < totalStudents && pairIdx < pairSeats.length) {
+                    newArrangement[pairSeats[pairIdx][0]] = shuffled[studentIdx++];
+                    newArrangement[pairSeats[pairIdx][1]] = shuffled[studentIdx++];
+                    pairIdx++;
+                }
+                
+                let tripleIdx = 1;
+                while (studentIdx + 1 < totalStudents && tripleIdx < tripleSeats.length) {
+                    newArrangement[tripleSeats[tripleIdx][0]] = shuffled[studentIdx++];
+                    newArrangement[tripleSeats[tripleIdx][1]] = shuffled[studentIdx++];
+                    tripleIdx++;
+                }
+            } else {
+                if (totalStudents <= 20) {
+                    const pairsNeeded = totalStudents / 2;
+                    for (let i = 0; i < pairsNeeded; i++) {
+                        newArrangement[pairSeats[i][0]] = shuffled[studentIdx++];
+                        newArrangement[pairSeats[i][1]] = shuffled[studentIdx++];
+                    }
+                } else {
+                    const extraStudents = totalStudents - 20;
+                    const maxPairsOnTriples = Math.min(tripleSeats.length, Math.floor(extraStudents / 2));
+                    
+                    for (let i = 0; i < pairSeats.length; i++) {
+                        newArrangement[pairSeats[i][0]] = shuffled[studentIdx++];
+                        newArrangement[pairSeats[i][1]] = shuffled[studentIdx++];
+                    }
+                    
+                    for (let i = 0; i < maxPairsOnTriples; i++) {
+                        newArrangement[tripleSeats[i][0]] = shuffled[studentIdx++];
+                        newArrangement[tripleSeats[i][1]] = shuffled[studentIdx++];
+                    }
+                    
+                    let tripleIdx = maxPairsOnTriples;
+                    while (studentIdx < totalStudents && tripleIdx < tripleSeats.length) {
+                        const remaining = totalStudents - studentIdx;
+                        
+                        if (remaining >= 3) {
+                            newArrangement[tripleSeats[tripleIdx][0]] = shuffled[studentIdx++];
+                            newArrangement[tripleSeats[tripleIdx][1]] = shuffled[studentIdx++];
+                            newArrangement[tripleSeats[tripleIdx][2]] = shuffled[studentIdx++];
+                        } else if (remaining === 2) {
+                            newArrangement[tripleSeats[tripleIdx][0]] = shuffled[studentIdx++];
+                            newArrangement[tripleSeats[tripleIdx][1]] = shuffled[studentIdx++];
+                        } else if (remaining === 1) {
+                            if (maxPairsOnTriples > 0) {
+                                const lastPairTripleIdx = maxPairsOnTriples - 1;
+                                newArrangement[tripleSeats[lastPairTripleIdx][2]] = shuffled[studentIdx++];
+                            }
+                        }
+                        
+                        tripleIdx++;
+                    }
+                }
+            }
+
+            displayNewSeating();
+            document.getElementById('newSeatingSection').style.display = 'block';
+        }
+
+        function displayNewSeating() {
+            const table = document.getElementById('newSeating');
+            table.innerHTML = '';
+
+            SEATING_STRUCTURE.forEach(row => {
+                const tr = document.createElement('tr');
+                
+                if (row.length === 0) {
+                    const td = document.createElement('td');
+                    td.colSpan = 9;
+                    td.style.height = '20px';
+                    td.style.border = 'none';
+                    td.style.background = 'transparent';
+                    tr.appendChild(td);
+                } else {
+                    row.forEach(seat => {
+                        const td = document.createElement('td');
+                        
+                        if (seat.gap) {
+                            td.className = 'corridor-cell';
+                        } else {
+                            const cellRef = seat.col + seat.row;
+                            const student = newArrangement[cellRef];
+                            
+                            td.className = 'seat-cell';
+                            
+                            if (student) {
+                                td.onclick = () => toggleAbsentByName(student.name);
+                                td.textContent = student.name;
+                                
+                                if (absentStudentNames.has(student.name)) {
+                                    td.classList.add('absent');
+                                } else {
+                                    td.classList.add('occupied');
+                                }
+                            } else {
+                                td.textContent = '';
+                                td.classList.add('empty');
+                            }
+                        }
+                        
+                        tr.appendChild(td);
+                    });
+                }
+                
+                table.appendChild(tr);
+            });
+        }
+
+        function toggleAbsentByName(studentName) {
+            if (absentStudentNames.has(studentName)) {
+                absentStudentNames.delete(studentName);
+            } else {
+                absentStudentNames.add(studentName);
+            }
+            
+            displayCurrentSeating();
+            displayNewSeating();
+            updateStudentCount();
+        }
+
+        function downloadData() {
+            if (!newArrangement) {
+                alert('Nincs generált ülésrend a letöltéshez!');
+                return;
+            }
+
+            const wb = XLSX.utils.book_new();
+            const ws = {};
+            
+            for (let row = 1; row <= 9; row += 2) {
+                for (const col of ['A', 'B', 'D', 'E', 'F', 'H', 'I']) {
+                    const cellRef = col + row;
+                    const student = newArrangement[cellRef];
+                    if (student) {
+                        ws[cellRef] = { v: student.name, t: 's' };
+                    }
+                }
+            }
+            
+            const range = XLSX.utils.decode_range('A1:I9');
+            ws['!ref'] = XLSX.utils.encode_range(range);
+            
+            ws['!cols'] = [
+                {width: 15}, {width: 15}, {width: 8}, {width: 15}, {width: 15},
+                {width: 15}, {width: 8}, {width: 15}, {width: 15}
+            ];
+            
+            XLSX.utils.book_append_sheet(wb, ws, "Új ülésrend");
+            
+            const today = new Date().toISOString().slice(0,10);
+            XLSX.writeFile(wb, `uj_ulesrend_${today}.xlsx`);
+            showFileStatus(`Új ülésrend letöltve: uj_ulesrend_${today}.xlsx`, 'success');
+        }
+
+        function openCurrentProjection() {
+            if (!originalData || Object.keys(originalData).length === 0) {
+                alert('Nincs betöltött ülésrend!');
+                return;
+            }
+
+            isMirrored = false;
+
+            const overlay = document.createElement('div');
+            overlay.className = 'projection-overlay';
+
+            const controls = document.createElement('div');
+            controls.className = 'projection-controls';
+
+            const mirrorBtn = document.createElement('button');
+            mirrorBtn.className = 'btn btn-mirror';
+            mirrorBtn.textContent = '👨‍🏫 Tanár nézet';
+            mirrorBtn.onclick = () => toggleMirrorCurrent(overlay);
+
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'projection-close';
+            closeBtn.textContent = '✕ Bezárás';
+            closeBtn.onclick = () => document.body.removeChild(overlay);
+
+            const title = document.createElement('h1');
+            title.className = 'projection-title';
+            title.textContent = 'Eredeti ülésrend';
+
+            const subtitle = document.createElement('div');
+            subtitle.className = 'projection-subtitle';
+            subtitle.textContent = 'Tanár szemszögéből';
+
+            const table = document.createElement('table');
+            table.className = 'projection-table';
+
+            SEATING_STRUCTURE.forEach(row => {
+                const tr = document.createElement('tr');
+                
+                if (row.length === 0) {
+                    const td = document.createElement('td');
+                    td.colSpan = 9;
+                    td.style.height = '2vh';
+                    td.style.border = 'none';
+                    tr.appendChild(td);
+                } else {
+                    row.forEach(seat => {
+                        const td = document.createElement('td');
+                        
+                        if (seat.gap) {
+                            td.className = 'projection-corridor';
+                        } else {
+                            const cellRef = seat.col + seat.row;
+                            const studentName = originalData[cellRef];
+                            
+                            td.className = 'projection-seat';
+                            
+                            if (studentName && !absentStudentNames.has(studentName)) {
+                                td.classList.add('occupied');
+                                td.textContent = studentName;
+                            } else if (studentName && absentStudentNames.has(studentName)) {
+                                td.classList.add('occupied');
+                                td.textContent = studentName;
+                                td.style.opacity = '0.5';
+                                td.style.backgroundColor = '#ffebee';
+                                td.style.borderColor = '#e74c3c';
+                                td.style.color = '#e74c3c';
+                            } else {
+                                td.classList.add('empty');
+                                td.textContent = '';
+                            }
+                        }
+                        
+                        tr.appendChild(td);
+                    });
+                }
+                
+                table.appendChild(tr);
+            });
+
+            controls.appendChild(mirrorBtn);
+            overlay.appendChild(controls);
+            overlay.appendChild(closeBtn);
+            overlay.appendChild(title);
+            overlay.appendChild(subtitle);
+            overlay.appendChild(table);
+            document.body.appendChild(overlay);
+
+            const handleKeydown = (e) => {
+                if (e.key === 'Escape') {
+                    document.body.removeChild(overlay);
+                    document.removeEventListener('keydown', handleKeydown);
+                } else if (e.key === 'm' || e.key === 'M') {
+                    toggleMirrorCurrent(overlay);
+                }
+            };
+            document.addEventListener('keydown', handleKeydown);
+        }
+
+        function toggleMirrorCurrent(overlay) {
+            isMirrored = !isMirrored;
+            const table = overlay.querySelector('.projection-table');
+            const btn = overlay.querySelector('.btn-mirror');
+            const subtitle = overlay.querySelector('.projection-subtitle');
+            
+            if (isMirrored) {
+                table.classList.add('mirrored');
+                btn.classList.add('active');
+                btn.textContent = '🧑‍🎓 Diák nézet';
+                subtitle.textContent = 'Diákok szemszögéből';
+            } else {
+                table.classList.remove('mirrored');
+                btn.classList.remove('active');
+                btn.textContent = '👨‍🏫 Tanár nézet';
+                subtitle.textContent = 'Tanár szemszögéből';
+            }
+        }
+
+        function openProjection() {
+            if (!newArrangement) {
+                alert('Először generáljon új ülésrendet!');
+                return;
+            }
+
+            isMirrored = false;
+
+            const overlay = document.createElement('div');
+            overlay.className = 'projection-overlay';
+
+            const controls = document.createElement('div');
+            controls.className = 'projection-controls';
+
+            const mirrorBtn = document.createElement('button');
+            mirrorBtn.className = 'btn btn-mirror';
+            mirrorBtn.textContent = '👨‍🏫 Tanár nézet';
+            mirrorBtn.onclick = toggleMirror;
+
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'projection-close';
+            closeBtn.textContent = '✕ Bezárás';
+            closeBtn.onclick = () => document.body.removeChild(overlay);
+
+            const title = document.createElement('h1');
+            title.className = 'projection-title';
+            title.textContent = 'Új ülésrend';
+
+            const subtitle = document.createElement('div');
+            subtitle.className = 'projection-subtitle';
+            subtitle.textContent = 'Tanár szemszögéből';
+
+            const table = document.createElement('table');
+            table.className = 'projection-table';
+
+            SEATING_STRUCTURE.forEach(row => {
+                const tr = document.createElement('tr');
+                
+                if (row.length === 0) {
+                    const td = document.createElement('td');
+                    td.colSpan = 9;
+                    td.style.height = '2vh';
+                    td.style.border = 'none';
+                    tr.appendChild(td);
+                } else {
+                    row.forEach(seat => {
+                        const td = document.createElement('td');
+                        
+                        if (seat.gap) {
+                            td.className = 'projection-corridor';
+                        } else {
+                            const cellRef = seat.col + seat.row;
+                            const student = newArrangement[cellRef];
+                            
+                            td.className = 'projection-seat';
+                            
+                            if (student) {
+                                td.classList.add('occupied');
+                                td.textContent = student.name;
+                            } else {
+                                td.classList.add('empty');
+                                td.textContent = '';
+                            }
+                        }
+                        
+                        tr.appendChild(td);
+                    });
+                }
+                
+                table.appendChild(tr);
+            });
+
+            controls.appendChild(mirrorBtn);
+            overlay.appendChild(controls);
+            overlay.appendChild(closeBtn);
+            overlay.appendChild(title);
+            overlay.appendChild(subtitle);
+            overlay.appendChild(table);
+            document.body.appendChild(overlay);
+
+            const handleKeydown = (e) => {
+                if (e.key === 'Escape') {
+                    document.body.removeChild(overlay);
+                    document.removeEventListener('keydown', handleKeydown);
+                } else if (e.key === 'm' || e.key === 'M') {
+                    toggleMirror();
+                }
+            };
+            document.addEventListener('keydown', handleKeydown);
+        }
+
+        function toggleMirror() {
+            isMirrored = !isMirrored;
+            const table = document.querySelector('.projection-table');
+            const btn = document.querySelector('.btn-mirror');
+            const subtitle = document.querySelector('.projection-subtitle');
+            
+            if (isMirrored) {
+                table.classList.add('mirrored');
+                btn.classList.add('active');
+                btn.textContent = '🧑‍🎓 Diák nézet';
+                subtitle.textContent = 'Diákok szemszögéből';
+            } else {
+                table.classList.remove('mirrored');
+                btn.classList.remove('active');
+                btn.textContent = '👨‍🏫 Tanár nézet';
+                subtitle.textContent = 'Tanár szemszögéből';
+            }
+        }
+    </script>
 </body>
 </html>
+                
