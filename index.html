@@ -4,9 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ülésrend szervező</title>
-
-    <meta name="description" content="Interaktív ülésrend-szervező tanároknak: tölts fel Excel-fájlt, jelöld a hiányzókat, készíts új véletlenszerű ülésrendet, majd töltsd le vagy vetítsd ki.">
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         * {
@@ -853,7 +850,11 @@
                 return;
             }
 
-            const shuffled = [...presentStudents].sort(() => Math.random() - 0.5);
+            const shuffled = [...presentStudents];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
             newArrangement = {};
             
             const pairSeats = [
@@ -869,65 +870,25 @@
             const totalStudents = shuffled.length;
             let studentIdx = 0;
             
-            if (totalStudents % 2 === 1) {
-                newArrangement[tripleSeats[0][0]] = shuffled[studentIdx++];
-                newArrangement[tripleSeats[0][1]] = shuffled[studentIdx++];
-                newArrangement[tripleSeats[0][2]] = shuffled[studentIdx++];
-                
-                let pairIdx = 0;
-                while (studentIdx + 1 < totalStudents && pairIdx < pairSeats.length) {
-                    newArrangement[pairSeats[pairIdx][0]] = shuffled[studentIdx++];
-                    newArrangement[pairSeats[pairIdx][1]] = shuffled[studentIdx++];
-                    pairIdx++;
+            // A párok előnyt élveznek, de minden jelenlévőnek helyet kell kapnia.
+            // 15 padon párokban 30 diák fér el; e fölött több trió szükséges.
+            // Páratlan létszámnál egy trió elkerüli az egyedül ültetést.
+            const pairCapacity = 2 * (pairSeats.length + tripleSeats.length);
+            const triplesNeeded = totalStudents === 1 ? 0 :
+                Math.max(totalStudents % 2, totalStudents - pairCapacity);
+
+            for (let i = 0; i < triplesNeeded; i++) {
+                for (const cellRef of tripleSeats[i]) {
+                    newArrangement[cellRef] = shuffled[studentIdx++];
                 }
-                
-                let tripleIdx = 1;
-                while (studentIdx + 1 < totalStudents && tripleIdx < tripleSeats.length) {
-                    newArrangement[tripleSeats[tripleIdx][0]] = shuffled[studentIdx++];
-                    newArrangement[tripleSeats[tripleIdx][1]] = shuffled[studentIdx++];
-                    tripleIdx++;
-                }
-            } else {
-                if (totalStudents <= 20) {
-                    const pairsNeeded = totalStudents / 2;
-                    for (let i = 0; i < pairsNeeded; i++) {
-                        newArrangement[pairSeats[i][0]] = shuffled[studentIdx++];
-                        newArrangement[pairSeats[i][1]] = shuffled[studentIdx++];
-                    }
-                } else {
-                    const extraStudents = totalStudents - 20;
-                    const maxPairsOnTriples = Math.min(tripleSeats.length, Math.floor(extraStudents / 2));
-                    
-                    for (let i = 0; i < pairSeats.length; i++) {
-                        newArrangement[pairSeats[i][0]] = shuffled[studentIdx++];
-                        newArrangement[pairSeats[i][1]] = shuffled[studentIdx++];
-                    }
-                    
-                    for (let i = 0; i < maxPairsOnTriples; i++) {
-                        newArrangement[tripleSeats[i][0]] = shuffled[studentIdx++];
-                        newArrangement[tripleSeats[i][1]] = shuffled[studentIdx++];
-                    }
-                    
-                    let tripleIdx = maxPairsOnTriples;
-                    while (studentIdx < totalStudents && tripleIdx < tripleSeats.length) {
-                        const remaining = totalStudents - studentIdx;
-                        
-                        if (remaining >= 3) {
-                            newArrangement[tripleSeats[tripleIdx][0]] = shuffled[studentIdx++];
-                            newArrangement[tripleSeats[tripleIdx][1]] = shuffled[studentIdx++];
-                            newArrangement[tripleSeats[tripleIdx][2]] = shuffled[studentIdx++];
-                        } else if (remaining === 2) {
-                            newArrangement[tripleSeats[tripleIdx][0]] = shuffled[studentIdx++];
-                            newArrangement[tripleSeats[tripleIdx][1]] = shuffled[studentIdx++];
-                        } else if (remaining === 1) {
-                            if (maxPairsOnTriples > 0) {
-                                const lastPairTripleIdx = maxPairsOnTriples - 1;
-                                newArrangement[tripleSeats[lastPairTripleIdx][2]] = shuffled[studentIdx++];
-                            }
-                        }
-                        
-                        tripleIdx++;
-                    }
+            }
+
+            const remainingDesks = [...pairSeats, ...tripleSeats.slice(triplesNeeded)];
+            for (const desk of remainingDesks) {
+                if (studentIdx >= totalStudents) break;
+                for (const cellRef of desk.slice(0, 2)) {
+                    if (studentIdx >= totalStudents) break;
+                    newArrangement[cellRef] = shuffled[studentIdx++];
                 }
             }
 
