@@ -535,6 +535,7 @@
         let absentStudentNames = new Set();
         let newArrangement = null;
         let isMirrored = false;
+        let studentGroups = new Map();
 
         const SEATING_STRUCTURE = [
             [{col: 'A', row: 1}, {col: 'B', row: 1}, {gap: true}, {col: 'D', row: 1}, {col: 'E', row: 1}, {col: 'F', row: 1}, {gap: true}, {col: 'H', row: 1}, {col: 'I', row: 1}],
@@ -571,6 +572,7 @@
         });
 
         function loadTestData() {
+            studentGroups = new Map();
             originalData = {
                 'A1': 'Fénylak Zara', 'B1': 'Viharszem Kael', 'D1': 'Csillagvető Luna', 'E1': 'Árnyékfog Drix', 'F1': 'Holdfény Nyxa',
                 'H1': 'Kristályhang Zylo', 'I1': 'Napvirág Vera', 'A3': 'Égboltkék Jinx', 'B3': 'Vaspenge Roku', 'D3': 'Tengerzöld Saia',
@@ -621,6 +623,7 @@
                 
                 // Munkalap hozzáadása
                 XLSX.utils.book_append_sheet(wb, ws, "Ülésrend");
+                appendGroupsSheet(wb, Object.values(templateData), new Map());
                 
                 // Excel fájl letöltése
                 XLSX.writeFile(wb, 'ulesrend_minta.xlsx');
@@ -654,22 +657,31 @@
                         throw new Error('A fájl nem tartalmaz munkalapokat');
                     }
                     
-                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                    originalData = {};
+                    const seatingSheetName = workbook.SheetNames.find(name =>
+                        name.trim().toLocaleLowerCase('hu') !== 'csoportok');
+                    if (!seatingSheetName) {
+                        throw new Error('A fájl nem tartalmaz ülésrendet');
+                    }
+                    const sheet = workbook.Sheets[seatingSheetName];
+                    const loadedData = {};
                     
                     for (let row = 1; row <= 9; row++) {
                         for (const col of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']) {
                             const cellRef = col + row;
                             const cell = sheet[cellRef];
                             if (cell && cell.v && String(cell.v).trim()) {
-                                originalData[cellRef] = String(cell.v).trim();
+                                loadedData[cellRef] = String(cell.v).trim();
                             }
                         }
                     }
 
-                    if (Object.keys(originalData).length === 0) {
+                    if (Object.keys(loadedData).length === 0) {
                         throw new Error('Nincs adat az A1-I9 tartományban');
                     }
+
+                    const loadedGroups = readGroupsSheet(workbook, loadedData);
+                    originalData = loadedData;
+                    studentGroups = loadedGroups;
 
                     // processOriginalData() meghívása és eredményének ellenőrzése
                     const processResult = processOriginalData();
@@ -842,6 +854,145 @@
                 `Jelenlévő: ${present}, Hiányzó: ${absent}, Összesen: ${currentStudents.length}`;
         }
 
+        // Opcionális Excel-adatok; a megjelenítés csak a tanulók nevét használja.
+        function readGroupsSheet(workbook, seatingData) {
+            const sheetName = workbook.SheetNames.find(name =>
+                name.trim().toLocaleLowerCase('hu') === 'csoportok');
+            const groups = new Map();
+            if (!sheetName) return groups;
+
+            // A minta egyszerű hivatkozásait közvetlenül is feloldjuk, így egy
+            // elavult Excel-képletgyorsítótárból sem olvasunk régi tanulónevet.
+            const resolvedSheet = {...workbook.Sheets[sheetName]};
+            for (const [address, cell] of Object.entries(resolvedSheet)) {
+                if (!cell || typeof cell.f !== 'string') continue;
+                const formula = cell.f.replace(/^=/, '');
+                const blankSafe = formula.match(/^IF\((.+)="","",\1\)$/i);
+                const reference = (blankSafe ? blankSafe[1] : formula).match(
+                    /^(?:'((?:[^']|'')+)'|([^'!]+))!\$?([A-Z]+)\$?([1-9]\d*)$/i);
+                if (!reference) continue;
+                const sourceName = (reference[1] || reference[2]).replace(/''/g, "'");
+                const sourceSheet = workbook.Sheets[sourceName];
+                if (!sourceSheet) continue;
+                const sourceCell = sourceSheet[reference[3].toUpperCase() + reference[4]];
+                resolvedSheet[address] = {t: 's', v: String(sourceCell?.v ?? '')};
+            }
+            const rows = XLSX.utils.sheet_to_json(resolvedSheet, {
+                header: 1, defval: '', raw: false, blankrows: false
+            });
+            if (rows.length === 0) return groups;
+            const header = rows[0].map(value => String(value).trim().toLocaleLowerCase('hu'));
+            const nameColumn = header.indexOf('név');
+            const groupColumn = header.indexOf('csoport');
+            if (nameColumn < 0 || groupColumn < 0) {
+                throw new Error('A Csoportok munkalap fejléce legyen: Név és Csoport.');
+            }
+
+            const validNames = new Set(Object.values(seatingData));
+            const labels = new Set();
+            for (const row of rows.slice(1)) {
+                const name = String(row[nameColumn] ?? '').trim();
+                const group = String(row[groupColumn] ?? '').trim().toLocaleUpperCase('hu');
+                if (!group) continue;
+                if (!name || !validNames.has(name)) {
+                    throw new Error('A Csoportok munkalap egyik neve nem szerepel az ülésrendben: ' + name);
+                }
+                if (groups.has(name) && groups.get(name) !== group) {
+                    throw new Error('Eltérő jelölések tartoznak ugyanahhoz a névhez: ' + name);
+                }
+                groups.set(name, group);
+                labels.add(group);
+            }
+            if (labels.size > 2) {
+                throw new Error('A Csoportok munkalapon legfeljebb kétféle jelölés használható (pl. A és B).');
+            }
+            return groups;
+        }
+
+        function appendGroupsSheet(workbook, names, groups) {
+            const rows = [['Név', 'Csoport'], ...names.map(name => [name, groups.get(name) || ''])];
+            const sheet = XLSX.utils.aoa_to_sheet(rows);
+            const sourceName = workbook.SheetNames[0];
+            const sourceSheet = workbook.Sheets[sourceName];
+            const nameToAddress = new Map(Object.entries(sourceSheet)
+                .filter(([address]) => /^[A-Z]+[1-9]\d*$/.test(address))
+                .map(([address, cell]) => [String(cell.v ?? ''), address]));
+            names.forEach((name, index) => {
+                const address = nameToAddress.get(name);
+                if (!address) return;
+                const reference = "'" + sourceName.replace(/'/g, "''") + "'!" + address;
+                sheet['A' + (index + 2)] = {
+                    t: 's', v: name, f: `IF(${reference}="","",${reference})`
+                };
+            });
+            sheet['!cols'] = [{width: 28}, {width: 14}];
+            XLSX.utils.book_append_sheet(workbook, sheet, 'Csoportok');
+        }
+
+        function shuffleItems(items) {
+            for (let i = items.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [items[i], items[j]] = [items[j], items[i]];
+            }
+            return items;
+        }
+
+        function assignStudentsToDesks(students, desks) {
+            const labels = [...new Set(students.map(student => studentGroups.get(student.name)).filter(Boolean))];
+            if (labels.length < 2) {
+                let index = 0;
+                for (const desk of desks) {
+                    for (const seat of desk) newArrangement[seat] = students[index++];
+                }
+                return;
+            }
+
+            // Az ismeretlen jelölés külön készlet: nem következtetünk a nevekből.
+            const pools = [[], [], []];
+            for (const student of students) {
+                const labelIndex = labels.indexOf(studentGroups.get(student.name));
+                pools[labelIndex < 0 ? 2 : labelIndex].push(student);
+            }
+            const memo = new Map();
+            // Először a vegyes padok számát maximalizáljuk, majd a padon belüli
+            // eltérő jelölésű kapcsolatokét. Egy trió sem veheti el indokolatlanul
+            // egy másik pad lehetőségét a vegyes összeállításra.
+            const weight = students.length + 1;
+            function best(index, a, b, unmarked) {
+                if (index === desks.length) return {score: 0, options: []};
+                const key = [index, a, b, unmarked].join(',');
+                if (memo.has(key)) return memo.get(key);
+                const size = desks[index].length;
+                const result = {score: -Infinity, options: []};
+                for (let takeA = 0; takeA <= Math.min(size, a); takeA++) {
+                    for (let takeB = 0; takeB <= Math.min(size - takeA, b); takeB++) {
+                        const takeUnmarked = size - takeA - takeB;
+                        if (takeUnmarked > unmarked) continue;
+                        const next = best(index + 1, a - takeA, b - takeB, unmarked - takeUnmarked);
+                        const score = next.score + (takeA && takeB ? weight : 0) + takeA * takeB;
+                        if (score > result.score) {
+                            result.score = score;
+                            result.options = [];
+                        }
+                        if (score === result.score) result.options.push([takeA, takeB, takeUnmarked]);
+                    }
+                }
+                memo.set(key, result);
+                return result;
+            }
+
+            for (let index = 0; index < desks.length; index++) {
+                const options = best(index, pools[0].length, pools[1].length, pools[2].length).options;
+                const counts = options[Math.floor(Math.random() * options.length)];
+                const members = [];
+                counts.forEach((count, poolIndex) => {
+                    for (let i = 0; i < count; i++) members.push(pools[poolIndex].pop());
+                });
+                shuffleItems(members);
+                desks[index].forEach((seat, i) => { newArrangement[seat] = members[i]; });
+            }
+        }
+
         function generateNewSeating() {
             const presentStudents = currentStudents.filter(s => !absentStudentNames.has(s.name));
             
@@ -850,11 +1001,7 @@
                 return;
             }
 
-            const shuffled = [...presentStudents];
-            for (let i = shuffled.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-            }
+            const shuffled = shuffleItems([...presentStudents]);
             newArrangement = {};
             
             const pairSeats = [
@@ -868,7 +1015,6 @@
             ];
 
             const totalStudents = shuffled.length;
-            let studentIdx = 0;
             
             // A párok előnyt élveznek, de minden jelenlévőnek helyet kell kapnia.
             // 15 padon párokban 30 diák fér el; e fölött több trió szükséges.
@@ -877,20 +1023,16 @@
             const triplesNeeded = totalStudents === 1 ? 0 :
                 Math.max(totalStudents % 2, totalStudents - pairCapacity);
 
-            for (let i = 0; i < triplesNeeded; i++) {
-                for (const cellRef of tripleSeats[i]) {
-                    newArrangement[cellRef] = shuffled[studentIdx++];
-                }
-            }
-
+            const desks = tripleSeats.slice(0, triplesNeeded);
+            let remainingStudents = totalStudents - 3 * triplesNeeded;
             const remainingDesks = [...pairSeats, ...tripleSeats.slice(triplesNeeded)];
             for (const desk of remainingDesks) {
-                if (studentIdx >= totalStudents) break;
-                for (const cellRef of desk.slice(0, 2)) {
-                    if (studentIdx >= totalStudents) break;
-                    newArrangement[cellRef] = shuffled[studentIdx++];
-                }
+                if (remainingStudents === 0) break;
+                const count = Math.min(2, remainingStudents);
+                desks.push(desk.slice(0, count));
+                remainingStudents -= count;
             }
+            assignStudentsToDesks(shuffled, desks);
 
             displayNewSeating();
             document.getElementById('newSeatingSection').style.display = 'block';
@@ -985,6 +1127,10 @@
             ];
             
             XLSX.utils.book_append_sheet(wb, ws, "Új ülésrend");
+            const names = Object.values(newArrangement).map(student => student.name);
+            if (names.some(name => studentGroups.has(name))) {
+                appendGroupsSheet(wb, names, studentGroups);
+            }
             
             const today = new Date().toISOString().slice(0,10);
             XLSX.writeFile(wb, `uj_ulesrend_${today}.xlsx`);
