@@ -993,6 +993,91 @@
             }
         }
 
+        function avoidOriginalPartners(students, desks) {
+            // Az eredeti Excel padjai az irányadók, nem az előző sorsolás.
+            const origins = new Map(students.map(student => {
+                const block = ['A', 'B'].includes(student.col) ? 'AB' :
+                    ['D', 'E', 'F'].includes(student.col) ? 'DEF' : 'HI';
+                return [student.name, student.row + ':' + block];
+            }));
+            const labels = [...new Set(students.map(student => studentGroups.get(student.name)).filter(Boolean))];
+            const weight = students.length + 1;
+            function measure(members) {
+                let repeated = 0;
+                for (let i = 0; i < members.length; i++) {
+                    for (let j = i + 1; j < members.length; j++) {
+                        if (origins.get(members[i].name) === origins.get(members[j].name)) repeated++;
+                    }
+                }
+                const a = members.filter(student => studentGroups.get(student.name) === labels[0]).length;
+                const b = labels.length < 2 ? 0 :
+                    members.filter(student => studentGroups.get(student.name) === labels[1]).length;
+                return {repeated, mixed: (a && b ? weight : 0) + a * b};
+            }
+
+            // Elméleti alsó korlát: kevés jelenlévőnél az eredeti padok
+            // szétválasztása olykor lehetetlen. Ilyenkor is mindenki helyet kap.
+            const originCounts = new Map();
+            for (const origin of origins.values()) originCounts.set(origin, (originCounts.get(origin) || 0) + 1);
+            let lowerBound = 0;
+            for (const count of originCounts.values()) {
+                const perDesk = Math.floor(count / desks.length);
+                lowerBound += desks.length * perDesk * (perDesk - 1) / 2 + (count % desks.length) * perDesk;
+            }
+
+            let bestArrangement = {...newArrangement};
+            let bestRepeated = Infinity;
+            // Véges keresés: a nehéz vagy lehetetlen esetek sem akasztják meg
+            // a felületet. Több véletlen kiindulásból keressük a legjobb kiosztást.
+            for (let attempt = 0; attempt < 64; attempt++) {
+                if (attempt > 0) assignStudentsToDesks(shuffleItems([...students]), desks);
+                const members = desks.map(desk => desk.map(seat => newArrangement[seat]));
+                let metrics = members.map(measure);
+                let repeated = metrics.reduce((sum, metric) => sum + metric.repeated, 0);
+                while (repeated > lowerBound) {
+                    let bestSwap = null;
+                    let nextRepeated = repeated;
+                    let ties = 0;
+                    for (let d1 = 0; d1 < desks.length; d1++) {
+                        for (let d2 = d1 + 1; d2 < desks.length; d2++) {
+                            for (let i = 0; i < members[d1].length; i++) {
+                                for (let j = 0; j < members[d2].length; j++) {
+                                    [members[d1][i], members[d2][j]] = [members[d2][j], members[d1][i]];
+                                    const first = measure(members[d1]);
+                                    const second = measure(members[d2]);
+                                    [members[d1][i], members[d2][j]] = [members[d2][j], members[d1][i]];
+                                    // Csak olyan csere engedett, amely megőrzi az
+                                    // optimális A/B keverést és a padok létszámát.
+                                    if (first.mixed + second.mixed !== metrics[d1].mixed + metrics[d2].mixed) continue;
+                                    const candidate = repeated - metrics[d1].repeated - metrics[d2].repeated + first.repeated + second.repeated;
+                                    if (candidate >= repeated || candidate > nextRepeated) continue;
+                                    if (candidate < nextRepeated) {
+                                        nextRepeated = candidate;
+                                        ties = 0;
+                                    }
+                                    if (Math.random() < 1 / ++ties) bestSwap = [d1, d2, i, j];
+                                }
+                            }
+                        }
+                    }
+                    if (!bestSwap) break;
+                    const [d1, d2, i, j] = bestSwap;
+                    [members[d1][i], members[d2][j]] = [members[d2][j], members[d1][i]];
+                    metrics = members.map(measure);
+                    repeated = nextRepeated;
+                }
+                if (repeated < bestRepeated) {
+                    bestRepeated = repeated;
+                    bestArrangement = {};
+                    desks.forEach((desk, d) => desk.forEach((seat, i) => {
+                        bestArrangement[seat] = members[d][i];
+                    }));
+                }
+                if (bestRepeated === lowerBound) break;
+            }
+            newArrangement = bestArrangement;
+        }
+
         function generateNewSeating() {
             const presentStudents = currentStudents.filter(s => !absentStudentNames.has(s.name));
             
@@ -1033,6 +1118,7 @@
                 remainingStudents -= count;
             }
             assignStudentsToDesks(shuffled, desks);
+            avoidOriginalPartners(shuffled, desks);
 
             displayNewSeating();
             document.getElementById('newSeatingSection').style.display = 'block';
