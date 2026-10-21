@@ -243,6 +243,21 @@ root.XLSX={read,writeFile,utils};
             box-shadow: 0 4px 12px rgba(52, 152, 219, 0.2);
         }
 
+        /* A generált ülésrend csak eredmény: nem kattintható, nem szerkeszthető. */
+        #newSeating .seat-cell { cursor: default; }
+        #newSeating .seat-cell:hover {
+            transform: none;
+            box-shadow: none;
+        }
+        #newSeating .seat-cell.occupied:hover {
+            background-color: white;
+            border-color: #27ae60;
+        }
+        #newSeating .seat-cell.empty:hover {
+            background-color: #f8f9fa;
+            border-color: #95a5a6;
+        }
+
         .seat-cell.occupied {
             background-color: white;
             border-color: #27ae60;
@@ -261,6 +276,62 @@ root.XLSX={read,writeFile,utils};
             border: 2px dashed #95a5a6;
             color: #7f8c8d;
         }
+
+        /* A rögzítés kizárólag a szerkesztő nézetben kap külön jelölést. */
+        .seat-cell.fixed:not(.absent) {
+            background-color: #f2e8ff;
+            border-color: #8e44ad;
+            color: #553073;
+        }
+        .seat-cell.fixed.absent { position: relative; }
+        .seat-cell.fixed.absent::after {
+            content: '🔒';
+            position: absolute;
+            right: 2px;
+            top: 1px;
+            font-size: 11px;
+            line-height: 1;
+        }
+        .marking-mode {
+            border: 0;
+            min-width: 0;
+            padding: 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin: 12px 0 16px;
+        }
+        .marking-mode legend {
+            width: 100%;
+            text-align: center;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .marking-mode label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border: 2px solid #b8cad1;
+            background: #edf4f7;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .marking-mode label:has(input:checked) {
+            border-color: #28799d;
+            background: #def3ff;
+            color: #145674;
+        }
+        .marking-mode label.fixed-mode:has(input:checked) {
+            border-color: #8e44ad;
+            background: #f2e8ff;
+            color: #553073;
+        }
+        .marking-mode input { accent-color: #8e44ad; width: 18px; height: 18px; }
+        .marking-hint { text-align: center; font-size: 14px; color: #596775; }
 
         .corridor-cell {
             width: 60px;
@@ -577,7 +648,13 @@ root.XLSX={read,writeFile,utils};
         </section>
 
         <section id="currentSeatingSection" style="display: none;">
-            <h2>2. Eredeti ülésrend - Jelölje meg a hiányzókat</h2>
+            <h2>2. Eredeti ülésrend – Hiányzók és rögzítések jelölése</h2>
+            <fieldset class="marking-mode">
+                <legend>Mit szeretne jelölni a tanulókra kattintva?</legend>
+                <label><input type="radio" name="markingMode" value="absent" checked onchange="setMarkingMode(this.value)">Hiányzók jelölése</label>
+                <label class="fixed-mode"><input type="radio" name="markingMode" value="fixed" onchange="setMarkingMode(this.value)">Rögzítés módosítása</label>
+            </fieldset>
+            <p class="marking-hint" id="markingHint">Kattintással jelölhető a hiányzás; újabb kattintással visszavonható.</p>
             <div class="legend">
                 <div class="legend-item">
                     <div class="legend-color" style="background-color: white; border-color: #27ae60;"></div>
@@ -586,6 +663,10 @@ root.XLSX={read,writeFile,utils};
                 <div class="legend-item">
                     <div class="legend-color" style="background-color: #ffebee; border-color: #e74c3c;"></div>
                     <span>Hiányzik</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #f2e8ff; border-color: #8e44ad;"></div>
+                    <span>Rögzített</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-color" style="background-color: #f8f9fa; border-color: #95a5a6; border-style: dashed;"></div>
@@ -606,6 +687,7 @@ root.XLSX={read,writeFile,utils};
             </div>
             <div class="controls">
                 <button class="btn btn-danger" onclick="resetAbsent()">Hiányzók visszaállítása</button>
+                <button class="btn btn-mirror" onclick="resetFixed()">Rögzítések visszaállítása</button>
                 <button class="btn btn-warning" onclick="openCurrentProjection()">Eredeti ülésrend vetítése</button>
                 <button class="btn btn-success" onclick="generateNewSeating()">Új ülésrend generálása</button>
             </div>
@@ -630,6 +712,9 @@ root.XLSX={read,writeFile,utils};
         let originalData = null;
         let currentStudents = [];
         let absentStudentNames = new Set();
+        let fixedStudentNames = new Set();
+        let originalFixedStudentNames = new Set();
+        let markingMode = 'absent';
         let newArrangement = null;
         let isMirrored = false;
         let studentGroups = new Map();
@@ -672,6 +757,7 @@ root.XLSX={read,writeFile,utils};
 
         function loadTestData() {
             studentGroups = new Map();
+            fixedStudentNames = new Set();
             groupDataInvalid = false;
             originalData = {
                 'A1': 'Fénylak Zara', 'B1': 'Viharszem Kael', 'D1': 'Csillagvető Luna', 'E1': 'Árnyékfog Drix', 'F1': 'Holdfény Nyxa',
@@ -779,16 +865,19 @@ root.XLSX={read,writeFile,utils};
                         throw new Error('Nincs adat az A1-I9 tartományban');
                     }
 
+                    const optionRows = readSeatingOptionsRows(workbook);
+                    // A hibás, kikapcsolt csoportkeverés ne írja felül az érvényes R-jelöléseket.
+                    const loadedFixed = readFixedStudentsSheet(optionRows, loadedData);
                     let loadedGroups = new Map();
                     let invalidGroups = false;
                     try {
-                        loadedGroups = readGroupsSheet(workbook, loadedData);
+                        loadedGroups = readGroupsSheet(optionRows, loadedData);
                     } catch (error) {
-                        // A kikapcsolt, opcionális funkció hibás adatai nem akadályozzák az ülésrendet.
                         invalidGroups = true;
                     }
                     originalData = loadedData;
                     studentGroups = loadedGroups;
+                    fixedStudentNames = loadedFixed;
                     groupDataInvalid = invalidGroups;
 
                     // processOriginalData() meghívása és eredményének ellenőrzése
@@ -876,6 +965,8 @@ root.XLSX={read,writeFile,utils};
 
             groupMixingEnabled = false;
             document.getElementById('groupMixingToggle').checked = false;
+            originalFixedStudentNames = new Set(fixedStudentNames);
+            setMarkingMode('absent');
             newArrangement = null;
             document.getElementById('newSeatingSection').style.display = 'none';
             displayCurrentSeating();
@@ -910,15 +1001,23 @@ root.XLSX={read,writeFile,utils};
                             const cellRef = seat.col + seat.row;
                             
                             td.className = 'seat-cell';
-                            td.onclick = () => toggleAbsent(cellRef);
-                            
                             if (student) {
                                 td.textContent = student.name;
-                                if (absentStudentNames.has(student.name)) {
-                                    td.classList.add('absent');
-                                } else {
-                                    td.classList.add('occupied');
-                                }
+                                const fixed = fixedStudentNames.has(student.name);
+                                const absent = absentStudentNames.has(student.name);
+                                td.onclick = () => markStudent(cellRef);
+                                td.tabIndex = 0;
+                                td.setAttribute('role', 'button');
+                                td.setAttribute('aria-label', student.name + (absent ? ', hiányzik' : ', jelen van') + (fixed ? ', rögzített' : ''));
+                                td.title = student.name + (absent ? ' – hiányzik' : ' – jelen van') + (fixed ? ', rögzített' : '');
+                                td.onkeydown = event => {
+                                    if (event.key === 'Enter' || event.key === ' ') {
+                                        event.preventDefault();
+                                        markStudent(cellRef);
+                                    }
+                                };
+                                if (fixed) td.classList.add('fixed');
+                                td.classList.add(absent ? 'absent' : 'occupied');
                             } else {
                                 td.textContent = '';
                                 td.classList.add('empty');
@@ -933,37 +1032,63 @@ root.XLSX={read,writeFile,utils};
             });
         }
 
-        function toggleAbsent(cellRef) {
+        function setMarkingMode(mode) {
+            markingMode = mode === 'fixed' ? 'fixed' : 'absent';
+            document.querySelectorAll('input[name="markingMode"]').forEach(input => {
+                input.checked = input.value === markingMode;
+            });
+            document.getElementById('markingHint').textContent = markingMode === 'fixed'
+                ? 'Kattintással rögzíthető vagy feloldható egy tanuló. Az Excelben szereplő R jelölést csak erre az alkalomra módosítja.'
+                : 'Kattintással jelölhető a hiányzás; újabb kattintással visszavonható. A rögzítést nem érinti.';
+        }
+
+        function invalidateGeneratedSeating() {
+            if (!newArrangement) return;
+            newArrangement = null;
+            document.getElementById('newSeatingSection').style.display = 'none';
+            document.getElementById('newSeating').innerHTML = '';
+        }
+
+        function markStudent(cellRef) {
             const student = currentStudents.find(s => s.originalPosition === cellRef);
             if (!student) return;
-
-            if (absentStudentNames.has(student.name)) {
-                absentStudentNames.delete(student.name);
+            if (markingMode === 'fixed') {
+                if (fixedStudentNames.has(student.name)) fixedStudentNames.delete(student.name);
+                else fixedStudentNames.add(student.name);
             } else {
-                absentStudentNames.add(student.name);
+                if (absentStudentNames.has(student.name)) absentStudentNames.delete(student.name);
+                else absentStudentNames.add(student.name);
             }
-            
+            invalidateGeneratedSeating();
             displayCurrentSeating();
-            if (newArrangement) {
-                displayNewSeating();
-            }
             updateStudentCount();
         }
 
         function resetAbsent() {
+            if (!absentStudentNames.size) return;
             absentStudentNames.clear();
+            invalidateGeneratedSeating();
             displayCurrentSeating();
-            if (newArrangement) {
-                displayNewSeating();
-            }
+            updateStudentCount();
+        }
+
+        function resetFixed() {
+            const changed = fixedStudentNames.size !== originalFixedStudentNames.size ||
+                [...fixedStudentNames].some(name => !originalFixedStudentNames.has(name));
+            if (!changed) return;
+            fixedStudentNames = new Set(originalFixedStudentNames);
+            invalidateGeneratedSeating();
+            displayCurrentSeating();
             updateStudentCount();
         }
 
         function updateStudentCount() {
             const present = currentStudents.length - absentStudentNames.size;
             const absent = absentStudentNames.size;
-            document.getElementById('studentCount').textContent = 
-                `Jelenlévő: ${present}, Hiányzó: ${absent}, Összesen: ${currentStudents.length}`;
+            const fixedPresent = [...fixedStudentNames].filter(name => !absentStudentNames.has(name)).length;
+            document.getElementById('studentCount').textContent =
+                `Jelenlévő: ${present}, Hiányzó: ${absent}, Összesen: ${currentStudents.length}, ` +
+                `Rögzített: ${fixedStudentNames.size} (ebből jelenlévő: ${fixedPresent})`;
             updateGroupMixingStatus();
         }
 
@@ -983,6 +1108,7 @@ root.XLSX={read,writeFile,utils};
                     : 'A csoportkeveréshez előbb meg kell adni a csoportbesorolásokat.');
                 return;
             }
+            if (groupMixingEnabled !== enabled) invalidateGeneratedSeating();
             groupMixingEnabled = enabled;
             document.getElementById('groupMixingToggle').checked = enabled;
             updateGroupMixingStatus();
@@ -1010,15 +1136,12 @@ root.XLSX={read,writeFile,utils};
             showGroupMixingStatus(message);
         }
 
-        // Opcionális Excel-adatok; a megjelenítés csak a tanulók nevét használja.
-        function readGroupsSheet(workbook, seatingData) {
+        // A Csoportok lap a névhez rendel opcionális csoportot és rögzítést.
+        // A nevek képletes hivatkozása a forráslapra a helyi Excel-olvasóban is feloldható.
+        function readSeatingOptionsRows(workbook) {
             const sheetName = workbook.SheetNames.find(name =>
                 name.trim().toLocaleLowerCase('hu') === 'csoportok');
-            const groups = new Map();
-            if (!sheetName) return groups;
-
-            // A minta egyszerű hivatkozásait közvetlenül is feloldjuk, így egy
-            // elavult Excel-képletgyorsítótárból sem olvasunk régi tanulónevet.
+            if (!sheetName) return [];
             const resolvedSheet = {...workbook.Sheets[sheetName]};
             for (const [address, cell] of Object.entries(resolvedSheet)) {
                 if (!cell || typeof cell.f !== 'string') continue;
@@ -1033,17 +1156,44 @@ root.XLSX={read,writeFile,utils};
                 const sourceCell = sourceSheet[reference[3].toUpperCase() + reference[4]];
                 resolvedSheet[address] = {t: 's', v: String(sourceCell?.v ?? '')};
             }
-            const rows = XLSX.utils.sheet_to_json(resolvedSheet, {
+            return XLSX.utils.sheet_to_json(resolvedSheet, {
                 header: 1, defval: '', raw: false, blankrows: false
             });
-            if (rows.length === 0) return groups;
+        }
+
+        function readFixedStudentsSheet(rows, seatingData) {
+            const fixed = new Set();
+            if (!rows.length) return fixed;
+            const header = rows[0].map(value => String(value).trim().toLocaleLowerCase('hu'));
+            const fixedColumn = header.indexOf('rögzített');
+            if (fixedColumn < 0) return fixed; // Régi, kétoszlopos fájl.
+            const nameColumn = header.indexOf('név');
+            if (nameColumn < 0) throw new Error('A Rögzített oszlop mellé Név fejléc is szükséges.');
+            const validNames = new Set(Object.values(seatingData));
+            for (const row of rows.slice(1)) {
+                const mark = String(row[fixedColumn] ?? '').trim().toLocaleUpperCase('hu');
+                if (!mark) continue;
+                const name = String(row[nameColumn] ?? '').trim();
+                if (mark !== 'R') {
+                    throw new Error('A Rögzített oszlopban csak R vagy üres cella szerepelhet (' + (name || 'név nélkül') + ').');
+                }
+                if (!name || !validNames.has(name)) {
+                    throw new Error('Rögzítéshez megadott név nem szerepel az ülésrendben: ' + (name || '(hiányzik)'));
+                }
+                fixed.add(name);
+            }
+            return fixed;
+        }
+
+        function readGroupsSheet(rows, seatingData) {
+            const groups = new Map();
+            if (!rows.length) return groups;
             const header = rows[0].map(value => String(value).trim().toLocaleLowerCase('hu'));
             const nameColumn = header.indexOf('név');
             const groupColumn = header.indexOf('csoport');
             if (nameColumn < 0 || groupColumn < 0) {
                 throw new Error('A Csoportok munkalap fejléce legyen: Név és Csoport.');
             }
-
             const validNames = new Set(Object.values(seatingData));
             const labels = new Set();
             for (const row of rows.slice(1)) {
@@ -1065,9 +1215,12 @@ root.XLSX={read,writeFile,utils};
             return groups;
         }
 
-        function appendGroupsSheet(workbook, names, groups) {
-            const rows = [['Név', 'Csoport'], ...names.map(name => [name, groups.get(name) || ''])];
+        function appendGroupsSheet(workbook, names, groups, fixed = new Set()) {
+            const rows = [['Név', 'Csoport', 'Rögzített', 'Kitöltési útmutató'],
+                ...names.map(name => [name, groups.get(name) || '', fixed.has(name) ? 'R' : ''])];
             const sheet = XLSX.utils.aoa_to_sheet(rows);
+            sheet['D2'] = {t: 's', v: 'A C oszlopba írt R jelenti, hogy a tanuló az eredeti helyén marad, nem vesz részt a keverésben. Üres cella = keverhető.'};
+            sheet['D3'] = {t: 's', v: 'A B oszlop csoportjelölése (pl. A vagy B) nem kötelező; a rögzítés ettől függetlenül működik.'};
             const sourceName = workbook.SheetNames[0];
             const sourceSheet = workbook.Sheets[sourceName];
             const nameToAddress = new Map(Object.entries(sourceSheet)
@@ -1081,7 +1234,7 @@ root.XLSX={read,writeFile,utils};
                     t: 's', v: name, f: `IF(${reference}="","",${reference})`
                 };
             });
-            sheet['!cols'] = [{width: 28}, {width: 14}];
+            sheet['!cols'] = [{width: 28}, {width: 14}, {width: 16}, {width: 95}];
             XLSX.utils.book_append_sheet(workbook, sheet, 'Csoportok');
         }
 
@@ -1236,11 +1389,163 @@ root.XLSX={read,writeFile,utils};
             newArrangement = bestArrangement;
         }
 
+        // Rögzített tanulók: az eredeti cellájukat soha nem cseréljük fel.
+        // A 15 pad fennmaradó helyeit úgy választjuk ki, hogy elsősorban párok,
+        // szükség esetén triók alakuljanak ki, lehetőleg egyedül ülő nélkül.
+        function generateSeatingWithFixed(presentStudents, fixedPresent) {
+            const deskDefinitions = [
+                ['A1','B1'], ['H1','I1'], ['A3','B3'], ['H3','I3'],
+                ['A5','B5'], ['H5','I5'], ['A7','B7'], ['H7','I7'],
+                ['A9','B9'], ['H9','I9'],
+                ['D1','E1','F1'], ['D3','E3','F3'], ['D5','E5','F5'],
+                ['D7','E7','F7'], ['D9','E9','F9']
+            ];
+            const fixedSeats = new Set(fixedPresent.map(student => student.originalPosition));
+            newArrangement = Object.fromEntries(fixedPresent.map(student => [student.originalPosition, student]));
+            const movable = presentStudents.filter(student => !fixedStudentNames.has(student.name));
+            const n = presentStudents.length;
+
+            // Dinamikus programozás: összlétszám szerint optimalizálja a padok
+            // méretét. Egy meglévő rögzített tanulóval foglalt pad nem hagyható ki.
+            const dp = Array.from({length: deskDefinitions.length + 1}, () => new Map());
+            dp[0].set(0, {cost: 0, sizes: []});
+            deskDefinitions.forEach((desk, index) => {
+                const forced = desk.filter(seat => fixedSeats.has(seat)).length;
+                for (const [count, state] of dp[index]) {
+                    for (let size = forced; size <= desk.length; size++) {
+                        if (size === 1 && !forced && n > 1) continue;
+                        if (count + size > n) continue;
+                        // Az egyedüli ülés a legutolsó, a trió a következő alternatíva.
+                        // Azonos minőség esetén a páros padokat használjuk először.
+                        const cost = state.cost + (size === 1 && n > 1 ? 1000 : 0) +
+                            (size === 3 ? 20 : 0) +
+                            (size > 0 ? 0.5 + index * 0.001 : 0);
+                        const earlier = dp[index + 1].get(count + size);
+                        if (!earlier || cost < earlier.cost) {
+                            dp[index + 1].set(count + size, {cost, sizes: [...state.sizes, size]});
+                        }
+                    }
+                }
+            });
+            const best = dp[deskDefinitions.length].get(n);
+            if (!best) throw new Error('Nincs elegendő ülőhely a rögzített tanulók mellett.');
+
+            function chooseFreeSeats(desk, targetCount) {
+                const forced = desk.filter(seat => fixedSeats.has(seat));
+                const options = desk.filter(seat => !fixedSeats.has(seat));
+                const needed = targetCount - forced.length;
+                if (!needed) return [];
+                const candidates = [];
+                function enumerate(start, chosen) {
+                    if (chosen.length === needed) {
+                        const selected = [...forced, ...chosen];
+                        const indices = selected.map(seat => desk.indexOf(seat));
+                        // A köztes üres székek számát minimalizáljuk.
+                        const gaps = Math.max(...indices) - Math.min(...indices) + 1 - selected.length;
+                        candidates.push({chosen: [...chosen], gaps});
+                        return;
+                    }
+                    for (let i = start; i < options.length; i++) enumerate(i + 1, [...chosen, options[i]]);
+                }
+                enumerate(0, []);
+                const gapMinimum = Math.min(...candidates.map(c => c.gaps));
+                // Holtversenynél mindig a korábbi székeket választjuk.
+                // Háromszemélyes padban így D–E a pár alaphelyzete; ha az F helyen
+                // valaki rögzített, az E–F pár élvez elsőbbséget.
+                return candidates.find(c => c.gaps === gapMinimum).chosen;
+            }
+
+            const desks = deskDefinitions.map((desk, index) => {
+                const size = best.sizes[index];
+                if (!size) return [];
+                const selected = new Set([...desk.filter(seat => fixedSeats.has(seat)),
+                    ...chooseFreeSeats(desk, size)]);
+                return desk.filter(seat => selected.has(seat));
+            }).filter(desk => desk.length);
+            const freeSlots = desks.flat().filter(seat => !fixedSeats.has(seat));
+            if (freeSlots.length !== movable.length) throw new Error('A kiosztás mérete hibás.');
+
+            const originalDesk = student => student.row + ':' +
+                (['A', 'B'].includes(student.col) ? 'AB' :
+                    ['D', 'E', 'F'].includes(student.col) ? 'DEF' : 'HI');
+            const groupLabels = [...new Set(presentStudents.map(s => studentGroups.get(s.name)).filter(Boolean))];
+            const mixing = groupMixingEnabled && groupLabels.length === 2;
+            const groupWeight = n + 1;
+            function score(arrangement) {
+                let repeated = 0, mixed = 0;
+                for (const desk of desks) {
+                    const members = desk.map(seat => arrangement[seat]);
+                    for (let i = 0; i < members.length; i++) {
+                        for (let j = i + 1; j < members.length; j++) {
+                            if (originalDesk(members[i]) === originalDesk(members[j])) repeated++;
+                        }
+                    }
+                    if (mixing) {
+                        const a = members.filter(s => studentGroups.get(s.name) === groupLabels[0]).length;
+                        const b = members.filter(s => studentGroups.get(s.name) === groupLabels[1]).length;
+                        mixed += (a && b ? groupWeight : 0) + a * b;
+                    }
+                }
+                return {mixed, repeated};
+            }
+            function better(a,b) {
+                if (!b) return true;
+                return (mixing && a.mixed !== b.mixed) ? a.mixed > b.mixed : a.repeated < b.repeated;
+            }
+            let overall = null, winner = null;
+            const trials = Math.max(1, movable.length < 2 ? 1 : 40);
+            for (let attempt = 0; attempt < trials; attempt++) {
+                const candidate = {...newArrangement};
+                shuffleItems([...movable]).forEach((student, index) => {
+                    candidate[freeSlots[index]] = student;
+                });
+                let metrics = score(candidate);
+                // Csak a szabad helyeket cseréljük; a rögzítettek érintetlenek.
+                while (freeSlots.length >= 2) {
+                    let swap = null, swapMetrics = null, ties = 0;
+                    for (let i = 0; i < freeSlots.length; i++) {
+                        for (let j = i + 1; j < freeSlots.length; j++) {
+                            const a = freeSlots[i], b = freeSlots[j];
+                            [candidate[a], candidate[b]] = [candidate[b], candidate[a]];
+                            const result = score(candidate);
+                            [candidate[a], candidate[b]] = [candidate[b], candidate[a]];
+                            if (!better(result, metrics)) continue;
+                            if (!swapMetrics || better(result, swapMetrics)) {
+                                swapMetrics = result;
+                                swap = [a,b];
+                                ties = 1;
+                            } else if (result.mixed === swapMetrics.mixed &&
+                                       result.repeated === swapMetrics.repeated && Math.random() < 1 / ++ties) {
+                                swap = [a,b];
+                            }
+                        }
+                    }
+                    if (!swap) break;
+                    [candidate[swap[0]], candidate[swap[1]]] = [candidate[swap[1]], candidate[swap[0]]];
+                    metrics = swapMetrics;
+                }
+                if (better(metrics, overall)) {
+                    winner = candidate;
+                    overall = metrics;
+                }
+                if (overall && overall.repeated === 0 && (!mixing || overall.mixed >= groupWeight * desks.length)) break;
+            }
+            newArrangement = winner || newArrangement;
+        }
+
         function generateNewSeating() {
             const presentStudents = currentStudents.filter(s => !absentStudentNames.has(s.name));
             
             if (presentStudents.length === 0) {
                 alert('Nincsenek jelenlévő diákok!');
+                return;
+            }
+
+            const fixedPresent = presentStudents.filter(student => fixedStudentNames.has(student.name));
+            if (fixedPresent.length) {
+                generateSeatingWithFixed(presentStudents, fixedPresent);
+                displayNewSeating();
+                document.getElementById('newSeatingSection').style.display = 'block';
                 return;
             }
 
@@ -1309,7 +1614,6 @@ root.XLSX={read,writeFile,utils};
                             td.className = 'seat-cell';
                             
                             if (student) {
-                                td.onclick = () => toggleAbsentByName(student.name);
                                 td.textContent = student.name;
                                 
                                 if (absentStudentNames.has(student.name)) {
@@ -1329,18 +1633,6 @@ root.XLSX={read,writeFile,utils};
                 
                 table.appendChild(tr);
             });
-        }
-
-        function toggleAbsentByName(studentName) {
-            if (absentStudentNames.has(studentName)) {
-                absentStudentNames.delete(studentName);
-            } else {
-                absentStudentNames.add(studentName);
-            }
-            
-            displayCurrentSeating();
-            displayNewSeating();
-            updateStudentCount();
         }
 
         async function downloadData() {
