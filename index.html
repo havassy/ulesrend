@@ -1883,9 +1883,10 @@ root.XLSX={read,writeFile,utils};
 
         function toggleMirror() {
             isMirrored = !isMirrored;
-            const table = document.querySelector('.projection-table');
-            const btn = document.querySelector('.btn-mirror');
-            const subtitle = document.querySelector('.projection-subtitle');
+            const overlay = document.querySelector('.projection-overlay');
+            const table = overlay.querySelector('.projection-table');
+            const btn = overlay.querySelector('.btn-mirror');
+            const subtitle = overlay.querySelector('.projection-subtitle');
             
             if (isMirrored) {
                 table.classList.add('mirrored');
