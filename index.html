@@ -682,7 +682,7 @@ root.XLSX={read,writeFile,utils};
                         aria-describedby="groupMixingHint groupMixingStatus" onchange="toggleGroupMixing(this.checked)">
                     Csoportok keverése
                 </label>
-                <p id="groupMixingHint">Lehetőleg vegyes párok és triók. A beállítás a következő generáláskor érvényesül.</p>
+                <p id="groupMixingHint">Lehetőleg vegyes párok és triók; háromfős padban A–B–A vagy B–A–B sorrend. Ehhez egy rögzített tanuló legfeljebb egy székkel arrébb kerülhet ugyanazon a padon belül. A beállítás a következő generáláskor érvényesül.</p>
                 <p id="groupMixingStatus" role="status" aria-live="polite" hidden></p>
             </div>
             <div class="controls">
@@ -1219,8 +1219,9 @@ root.XLSX={read,writeFile,utils};
             const rows = [['Név', 'Csoport', 'Rögzített', 'Kitöltési útmutató'],
                 ...names.map(name => [name, groups.get(name) || '', fixed.has(name) ? 'R' : ''])];
             const sheet = XLSX.utils.aoa_to_sheet(rows);
-            sheet['D2'] = {t: 's', v: 'A C oszlopba írt R jelenti, hogy a tanuló az eredeti helyén marad, nem vesz részt a keverésben. Üres cella = keverhető.'};
+            sheet['D2'] = {t: 's', v: 'R a C oszlopban: a tanuló nem kerül másik padba, és nem vesz részt az általános keverésben. Üres = keverhető.'};
             sheet['D3'] = {t: 's', v: 'A B oszlop csoportjelölése (pl. A vagy B) nem kötelező; a rögzítés ettől függetlenül működik.'};
+            sheet['D4'] = {t: 's', v: 'Kivétel: bekapcsolt csoportkeverésnél háromfős padban a rögzített tanuló legfeljebb egy székkel arrébb ülhet az A–B–A / B–A–B sorrendhez.'};
             const sourceName = workbook.SheetNames[0];
             const sourceSheet = workbook.Sheets[sourceName];
             const nameToAddress = new Map(Object.entries(sourceSheet)
@@ -1533,6 +1534,34 @@ root.XLSX={read,writeFile,utils};
             newArrangement = winner || newArrangement;
         }
 
+        // Csak bekapcsolt A/B csoportkeveréskor: két azonos és egy eltérő
+        // jelölésű tanulóból A–B–A vagy B–A–B sorrendet alakítunk ki.
+        // A pad összetétele nem változik. Legfeljebb egy rögzített tanulót
+        // mozdíthatunk el a padon belül egy székkel; két vagy több rögzített
+        // tanuló esetén a korábbi ülőhelyeket változatlanul hagyjuk.
+        function arrangeMixedTrios() {
+            if (!groupMixingEnabled || !newArrangement) return;
+            const tripleDesks = [1, 3, 5, 7, 9].map(row =>
+                ['D', 'E', 'F'].map(col => col + row));
+            for (const seats of tripleDesks) {
+                const members = seats.map(seat => newArrangement[seat]);
+                if (members.some(member => !member)) continue;
+                const labels = members.map(member => studentGroups.get(member.name));
+                if (labels.some(label => !label) || new Set(labels).size !== 2) continue;
+                const minority = labels.find(label => labels.filter(other => other === label).length === 1);
+                if (labels[1] === minority) continue;
+                const center = seats[1];
+                const sourceIndex = labels.indexOf(minority);
+                const source = seats[sourceIndex];
+                // A csere szomszédos (szélső ↔ középső) székek között történik,
+                // ezért a benne részt vevő egyetlen rögzített tanuló is csak
+                // egy hellyel mozdul el. Több rögzítettnél nem változtatunk.
+                if (members.filter(member => fixedStudentNames.has(member.name)).length > 1) continue;
+                [newArrangement[center], newArrangement[source]] =
+                    [newArrangement[source], newArrangement[center]];
+            }
+        }
+
         function generateNewSeating() {
             const presentStudents = currentStudents.filter(s => !absentStudentNames.has(s.name));
             
@@ -1544,6 +1573,7 @@ root.XLSX={read,writeFile,utils};
             const fixedPresent = presentStudents.filter(student => fixedStudentNames.has(student.name));
             if (fixedPresent.length) {
                 generateSeatingWithFixed(presentStudents, fixedPresent);
+                arrangeMixedTrios();
                 displayNewSeating();
                 document.getElementById('newSeatingSection').style.display = 'block';
                 return;
@@ -1582,6 +1612,7 @@ root.XLSX={read,writeFile,utils};
             }
             assignStudentsToDesks(shuffled, desks);
             avoidOriginalPartners(shuffled, desks);
+            arrangeMixedTrios();
 
             displayNewSeating();
             document.getElementById('newSeatingSection').style.display = 'block';
