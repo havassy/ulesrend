@@ -3,7 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ülésrend szervező</title>
+    <title>Ülésrend szervező és csoportalakító – offline tanári segédprogram</title>
+    <meta name="description" content="Offline ülésrendkészítés, hiányzók és rögzítések kezelése, A/B csoportalakítás, együtt–külön megkötések és Excel-export.">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Ülésrend szervező és csoportalakító">
+    <meta property="og:description" content="Offline tanári segédprogram ülésrendek és tanulócsoportok készítéséhez.">
+    <meta property="og:image" content="https://CSERELENDO-HTTPS-CIM/ulesrend/ulesrend-csoportalakitas-preview.png">
+    <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Ülésrend szervező és csoportalakító">
+    <meta name="twitter:description" content="Offline tanári segédprogram ülésrendek és tanulócsoportok készítéséhez.">
+    <meta name="twitter:image" content="https://CSERELENDO-HTTPS-CIM/ulesrend/ulesrend-csoportalakitas-preview.png">
     <!-- Excel kezelés: minden könyvtár beépítve, hálózat nem szükséges. -->
     <script>
 /*!
@@ -627,6 +637,157 @@ root.XLSX={read,writeFile,utils};
         .mixing-option input { width: 20px; height: 20px; accent-color: #3498db; }
         .mixing-option p { margin-top: 6px; font-size: 14px; color: #596775; }
         #groupMixingStatus { color: #805500; }
+
+        /* Csoportalakítás: csak az új rész helyi stílusai. */
+        .team-intro { margin: -6px 0 18px; color: #465567; }
+        .team-options { background: #f6f9fc; border: 1px solid #dce6ef; border-radius: 10px; padding: 18px; }
+        .team-number-label { display: inline-flex; align-items: center; gap: 12px; font-weight: 600; flex-wrap: wrap; }
+        #teamCount { width: 90px; font: inherit; font-weight: 600; font-size: 17px; border: 1px solid #8195aa; border-radius: 6px; padding: 9px 10px; background: #fff; }
+        .team-help { color: #506276; font-size: 14px; line-height: 1.5; margin: 8px 0 12px; }
+        .team-check-label { display: inline-flex; align-items: center; gap: 9px; font-weight: 600; cursor: pointer; }
+        .team-check-label input { width: 20px; height: 20px; accent-color: #6941c6; }
+        .team-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+        .team-actions .btn:disabled, .team-editor-controls .btn:disabled { opacity: .46; cursor: not-allowed; transform: none; }
+        .team-warnings { margin: 12px 0 18px; border: 1px solid #e3b553; border-left: 4px solid #c5820e; background: #fff8e8; border-radius: 7px; padding: 12px 16px; color: #573d12; }
+        .team-warnings p { margin: 5px 0; }
+        .team-editor { background: #f6f9fc; border: 1px solid #dce6ef; padding: 14px; border-radius: 10px; margin: 14px 0; }
+        .team-editor-controls { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin-top: 10px; }
+        .team-editor-controls label { display: flex; align-items: center; gap: 8px; font-weight:600; }
+        .team-editor-controls select { font:inherit; min-width:110px; padding: 7px 9px; border: 1px solid #849bb1; border-radius: 6px; background:white; }
+        .team-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 265px), 1fr)); gap: 14px; margin: 14px 0; }
+        .team-card { background: white; border: 1px solid #d2deea; border-radius: 10px; padding: 15px; min-width:0; }
+        .team-card.drag-over { outline: 3px solid #66b0ff; outline-offset: 1px; }
+        .team-card h3 { font-size: 17px; font-weight: 650; margin-bottom: 4px; color: #233d59; }
+        .team-summary { font-size: 13px; color: #526578; margin-bottom: 12px; }
+        .team-members { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+        .team-student { width: 100%; text-align: left; cursor: pointer; padding: 10px 11px; border-radius: 7px; background: #f5f7f9; border: 1px solid #cdd8e3; color: #233d59; font:inherit; font-weight:500; min-height:42px; }
+        .team-student.group-a { background:#e7f0ff; border-color:#82afe5; }
+        .team-student.group-b { background:#fae9f2; border-color:#e19fbe; }
+        .team-student:hover, .team-student:focus-visible { outline: 2px solid #246db6; outline-offset: 1px; }
+        .team-student.selected { outline: 3px solid #7253cc; outline-offset: 1px; }
+        .team-mark { opacity: .75; font-weight: 400; font-size: 12px; }
+        /* A csoportvetítés saját, egy képernyőre méretezett rétege.
+           Az ülésrend régi vetítését és a szerkesztőt nem érinti. */
+        .team-projection-overlay {
+            box-sizing: border-box;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+            justify-content: flex-start;
+            align-items: stretch;
+            padding: clamp(9px, 1.35vh, 18px) clamp(10px, 1.6vw, 28px);
+            gap: clamp(7px, 1vh, 12px);
+        }
+        .team-projection-header {
+            display: flex;
+            flex: 0 0 auto;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            min-height: 40px;
+        }
+        .team-projection-headings { display: flex; align-items: baseline; gap: 15px; min-width: 0; }
+        .team-projection-overlay .projection-title {
+            margin: 0;
+            font-size: clamp(21px, 2.1vw, 32px);
+            line-height: 1.1;
+            font-weight: 650;
+            color: #243d57;
+        }
+        .team-projection-overlay .projection-subtitle {
+            margin: 0;
+            font-size: clamp(13px, 1vw, 18px);
+            line-height: 1;
+            white-space: nowrap;
+        }
+        .team-projection-overlay .projection-close,
+        .team-projection-overlay .projection-close:hover {
+            position: static;
+            transform: none;
+            margin: 0;
+            padding: 9px 15px;
+            flex: 0 0 auto;
+            font-size: 15px;
+            border-radius: 7px;
+        }
+        .team-projection-overlay .projection-close:focus-visible {
+            outline: 3px solid #184d91;
+            outline-offset: 2px;
+        }
+        .team-projection-grid {
+            display: grid;
+            flex: 1 1 0;
+            min-height: 0;
+            width: 100%;
+            margin: 0;
+            grid-template-columns: repeat(var(--projection-columns, 3), minmax(0, 1fr));
+            grid-template-rows: repeat(var(--projection-rows, 3), minmax(0, 1fr));
+            gap: var(--team-gap, 10px);
+            align-items: stretch;
+            overflow: hidden;
+        }
+        .team-projection-card {
+            box-sizing: border-box;
+            background: #fff;
+            border: 1px solid #d2deea;
+            border-radius: 9px;
+            padding: var(--team-card-pad, 9px);
+            min-width: 0;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .team-projection-card h3 {
+            margin: 0;
+            font-size: var(--team-heading-font, 22px);
+            font-weight: 650;
+            line-height: 1.18;
+            color: #233d59;
+        }
+        .team-projection-summary {
+            font-size: var(--team-summary-font, 14px);
+            color: #526578;
+            margin: 1px 0 var(--team-summary-gap, 6px);
+            line-height: 1.18;
+        }
+        .team-projection-members {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: var(--team-member-gap, 5px);
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+        .team-projection-student {
+            box-sizing: border-box;
+            flex: 1 1 0;
+            display: flex;
+            align-items: center;
+            min-height: 0;
+            border: 1px solid #cfd9e3;
+            background: #f7f9fc;
+            border-radius: 6px;
+            padding: 2px var(--team-name-pad, 9px);
+            font-size: var(--team-name-font, 21px);
+            font-weight: 600;
+            line-height: 1.12;
+            color: #233d59;
+            overflow-wrap: anywhere;
+        }
+        @media (max-width: 600px) {
+            .team-projection-headings { gap: 5px; flex-direction: column; }
+            .team-projection-overlay .projection-close { padding: 8px 10px; font-size: 13px; }
+        }
+        @media(max-width: 768px) {
+            .team-actions .btn, .team-editor-controls .btn { width: auto; margin: 2px; }
+            .team-editor-controls { flex-direction: column; align-items: stretch; }
+            .team-editor-controls label { justify-content: space-between; }
+            .team-cards { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -680,9 +841,9 @@ root.XLSX={read,writeFile,utils};
                 <label for="groupMixingToggle">
                     <input type="checkbox" role="switch" id="groupMixingToggle"
                         aria-describedby="groupMixingHint groupMixingStatus" onchange="toggleGroupMixing(this.checked)">
-                    Csoportok keverése
+                    Vegyes padok kialakítása
                 </label>
-                <p id="groupMixingHint">Lehetőleg vegyes párok és triók; háromfős padban A–B–A vagy B–A–B sorrend. Ehhez egy rögzített tanuló legfeljebb egy székkel arrébb kerülhet ugyanazon a padon belül. A beállítás a következő generáláskor érvényesül.</p>
+                <p id="groupMixingHint">Az ülésrendben lehetőleg vegyes A/B párok és triók; háromfős padban A–B–A vagy B–A–B sorrend. Ehhez egy rögzített tanuló legfeljebb egy székkel arrébb kerülhet ugyanazon a padon belül. A beállítás a következő generáláskor érvényesül.</p>
                 <p id="groupMixingStatus" role="status" aria-live="polite" hidden></p>
             </div>
             <div class="controls">
@@ -705,6 +866,42 @@ root.XLSX={read,writeFile,utils};
                 <table class="seating-table" id="newSeating"></table>
             </div>
         </section>
+
+        <section id="teamSection" style="display: none;" aria-labelledby="teamSectionTitle">
+            <h2 id="teamSectionTitle">4. Csoportalakítás</h2>
+            <p class="team-intro">Az új csoportok az adott alkalommal <strong>jelen lévő tanulókból</strong> készülnek, az ülésrendtől függetlenül. Elsőbbséget kap a lehető legegyenletesebb csoportlétszám, majd az A/B jelölések vegyes elosztása.</p>
+            <div class="team-options">
+                <label class="team-number-label" for="teamCount">Csoportok száma
+                    <input type="number" id="teamCount" min="1" max="35" step="1" value="6" inputmode="numeric" aria-describedby="teamCountHint">
+                </label>
+                <p id="teamCountHint" class="team-help">A program a jelenlévők között lehetőleg azonos létszámú csoportokat alakít ki.</p>
+                <label class="team-check-label" for="teamConstraintsToggle">
+                    <input type="checkbox" id="teamConstraintsToggle" onchange="toggleTeamConstraints(this.checked)">
+                    Együtt–külön jelölések figyelembevétele
+                </label>
+                <p id="teamConstraintHint" class="team-help">A C1, C2, C3… jelölésűek az azonos jelűekkel lehetőleg együtt; a D jelölésűek lehetőleg külön csoportba kerülnek. A megkötések csak ebben a csoportalakítóban érvényesülnek.</p>
+                <div class="team-actions">
+                    <button class="btn btn-success" type="button" onclick="generateTeamGroups()">Csoportok generálása / újragenerálása</button>
+                    <button class="btn btn-warning" id="teamProjectionButton" type="button" onclick="openTeamProjection()" disabled>Vetítés</button>
+                    <button class="btn btn-secondary" id="teamExportButton" type="button" onclick="downloadTeamGroups()" disabled>Excel-export</button>
+                </div>
+            </div>
+            <div id="teamStatus" class="status info" role="status" aria-live="polite">A csoportok létrehozásához válaszd ki a csoportok számát.</div>
+            <div id="teamWarnings" class="team-warnings" role="status" aria-live="polite" hidden></div>
+            <div id="teamResults" hidden>
+                <div class="team-editor" id="teamEditor">
+                    <p><strong>Kézi módosítás:</strong> egy névre, majd egy másikra kattintva felcserélheted őket. A kiválasztott tanulót az alábbi gombbal másik csoportba is áthelyezheted. Asztali gépen áthúzással is működik.</p>
+                    <div class="team-editor-controls">
+                        <span id="teamSelectedStudent" aria-live="polite">Nincs kiválasztott tanuló.</span>
+                        <label for="teamTargetSelect">Célcsoport
+                            <select id="teamTargetSelect"></select>
+                        </label>
+                        <button class="btn btn-warning" type="button" id="teamMoveButton" onclick="moveSelectedTeamStudent()" disabled>Áthelyezés</button>
+                    </div>
+                </div>
+                <div id="teamCards" class="team-cards"></div>
+            </div>
+        </section>
     </div>
 
     <script>
@@ -720,6 +917,13 @@ root.XLSX={read,writeFile,utils};
         let studentGroups = new Map();
         let groupMixingEnabled = false;
         let groupDataInvalid = false;
+        let togetherApartLabels = new Map();
+        let togetherApartError = '';
+        let teamGroups = null;  // Array<Array<student>>, külön a padbeosztástól
+        let teamManualEdits = false;
+        let selectedTeamName = null;
+        let draggedTeamName = null;
+        let teamLastUsedConstraints = false;
 
         const SEATING_STRUCTURE = [
             [{col: 'A', row: 1}, {col: 'B', row: 1}, {gap: true}, {col: 'D', row: 1}, {col: 'E', row: 1}, {col: 'F', row: 1}, {gap: true}, {col: 'H', row: 1}, {col: 'I', row: 1}],
@@ -735,6 +939,14 @@ root.XLSX={read,writeFile,utils};
 
         // Event listeners
         document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+        document.getElementById('teamCount').addEventListener('change', function () {
+            if (!teamGroups || Number(this.value) === teamGroups.length) return;
+            if (teamManualEdits && !confirm('A csoportszám megváltoztatásához új csoportbeosztás kell, így a kézi módosítások elvesznek. Folytatod?')) {
+                this.value = String(teamGroups.length);
+                return;
+            }
+            invalidateTeamGroups('Megváltozott a csoportszám. Generálj új csoportbeosztást.');
+        });
         
         const uploadArea = document.getElementById('uploadArea');
         uploadArea.addEventListener('dragover', (e) => {
@@ -759,6 +971,8 @@ root.XLSX={read,writeFile,utils};
             studentGroups = new Map();
             fixedStudentNames = new Set();
             groupDataInvalid = false;
+            togetherApartLabels = new Map();
+            togetherApartError = '';
             originalData = {
                 'A1': 'Fénylak Zara', 'B1': 'Viharszem Kael', 'D1': 'Csillagvető Luna', 'E1': 'Árnyékfog Drix', 'F1': 'Holdfény Nyxa',
                 'H1': 'Kristályhang Zylo', 'I1': 'Napvirág Vera', 'A3': 'Égboltkék Jinx', 'B3': 'Vaspenge Roku', 'D3': 'Tengerzöld Saia',
@@ -875,10 +1089,19 @@ root.XLSX={read,writeFile,utils};
                     } catch (error) {
                         invalidGroups = true;
                     }
+                    let loadedTogetherApart = new Map();
+                    let togetherError = '';
+                    try {
+                        loadedTogetherApart = readTogetherApartSheet(optionRows, loadedData);
+                    } catch (error) {
+                        togetherError = error.message;
+                    }
                     originalData = loadedData;
                     studentGroups = loadedGroups;
                     fixedStudentNames = loadedFixed;
                     groupDataInvalid = invalidGroups;
+                    togetherApartLabels = loadedTogetherApart;
+                    togetherApartError = togetherError;
 
                     // processOriginalData() meghívása és eredményének ellenőrzése
                     const processResult = processOriginalData();
@@ -969,6 +1192,7 @@ root.XLSX={read,writeFile,utils};
             setMarkingMode('absent');
             newArrangement = null;
             document.getElementById('newSeatingSection').style.display = 'none';
+            resetTeamGroupsForFile();
             displayCurrentSeating();
             updateStudentCount();
             
@@ -1060,6 +1284,7 @@ root.XLSX={read,writeFile,utils};
                 else absentStudentNames.add(student.name);
             }
             invalidateGeneratedSeating();
+            if (markingMode === 'absent') invalidateTeamGroups('Változott a jelenlét. Generálj új csoportbeosztást.');
             displayCurrentSeating();
             updateStudentCount();
         }
@@ -1068,6 +1293,7 @@ root.XLSX={read,writeFile,utils};
             if (!absentStudentNames.size) return;
             absentStudentNames.clear();
             invalidateGeneratedSeating();
+            invalidateTeamGroups('Változott a jelenlét. Generálj új csoportbeosztást.');
             displayCurrentSeating();
             updateStudentCount();
         }
@@ -1105,7 +1331,7 @@ root.XLSX={read,writeFile,utils};
                 document.getElementById('groupMixingToggle').checked = false;
                 showGroupMixingStatus(groupDataInvalid
                     ? 'A csoportbesorolások hiányosak vagy hibásak. Ellenőrizd őket a forrásfájlban.'
-                    : 'A csoportkeveréshez előbb meg kell adni a csoportbesorolásokat.');
+                    : 'A vegyes padokhoz előbb meg kell adni az A/B jelöléseket.');
                 return;
             }
             if (groupMixingEnabled !== enabled) invalidateGeneratedSeating();
@@ -1215,13 +1441,15 @@ root.XLSX={read,writeFile,utils};
             return groups;
         }
 
-        function appendGroupsSheet(workbook, names, groups, fixed = new Set()) {
-            const rows = [['Név', 'Csoport', 'Rögzített', 'Kitöltési útmutató'],
-                ...names.map(name => [name, groups.get(name) || '', fixed.has(name) ? 'R' : ''])];
+        function appendGroupsSheet(workbook, names, groups, fixed = new Set(), constraints = new Map()) {
+            const rows = [['Név', 'Csoport', 'Rögzített', 'Együtt–külön', 'Kitöltési útmutató'],
+                ...names.map(name => [name, groups.get(name) || '', fixed.has(name) ? 'R' : '', constraints.get(name) || ''])];
             const sheet = XLSX.utils.aoa_to_sheet(rows);
-            sheet['D2'] = {t: 's', v: 'R a C oszlopban: a tanuló nem kerül másik padba, és nem vesz részt az általános keverésben. Üres = keverhető.'};
-            sheet['D3'] = {t: 's', v: 'A B oszlop csoportjelölése (pl. A vagy B) nem kötelező; a rögzítés ettől függetlenül működik.'};
-            sheet['D4'] = {t: 's', v: 'Kivétel: bekapcsolt csoportkeverésnél háromfős padban a rögzített tanuló legfeljebb egy székkel arrébb ülhet az A–B–A / B–A–B sorrendhez.'};
+            sheet['E2'] = {t: 's', v: 'R a C oszlopban: a tanuló nem kerül másik padba, és nem vesz részt az általános keverésben. Üres = keverhető.'};
+            sheet['E3'] = {t: 's', v: 'A B oszlop csoportjelölése (pl. A vagy B) nem kötelező; a rögzítés ettől függetlenül működik.'};
+            sheet['E4'] = {t: 's', v: 'Kivétel: bekapcsolt csoportkeverésnél háromfős padban a rögzített tanuló legfeljebb egy székkel arrébb ülhet az A–B–A / B–A–B sorrendhez.'};
+            sheet['E5'] = {t: 's', v: 'D oszlop: C1, C2, C3 stb. = azonos jelű tanulók lehetőleg együtt; D = egymástól külön; üres = nincs megkötés.'};
+            sheet['E6'] = {t: 's', v: 'Az Együtt–külön jelölések használata a Csoportalakításnál külön kapcsolható. A létszám elsőbbséget élvez; ütközésnél figyelmeztetés jelenik meg.'};
             const sourceName = workbook.SheetNames[0];
             const sourceSheet = workbook.Sheets[sourceName];
             const nameToAddress = new Map(Object.entries(sourceSheet)
@@ -1235,8 +1463,621 @@ root.XLSX={read,writeFile,utils};
                     t: 's', v: name, f: `IF(${reference}="","",${reference})`
                 };
             });
-            sheet['!cols'] = [{width: 28}, {width: 14}, {width: 16}, {width: 95}];
+            sheet['!cols'] = [{width: 28}, {width: 14}, {width: 16}, {width: 18}, {width: 100}];
             XLSX.utils.book_append_sheet(workbook, sheet, 'Csoportok');
+        }
+
+        // Az új Csoportalakítás külön működik az ülésrendszervezéstől.
+        function readTogetherApartSheet(rows, seatingData) {
+            const labels = new Map();
+            if (!rows.length) return labels;
+            const header = rows[0].map(value => String(value).trim().toLocaleLowerCase('hu'));
+            const markerCol = header.indexOf('együtt–külön') >= 0
+                ? header.indexOf('együtt–külön') : header.indexOf('együtt-külön');
+            if (markerCol < 0) return labels;  // korábbi Excel-fájlok
+            const nameCol = header.indexOf('név');
+            if (nameCol < 0) throw new Error('Az Együtt–külön oszlophoz Név fejléc is szükséges.');
+            const validNames = new Set(Object.values(seatingData));
+            for (const row of rows.slice(1)) {
+                const marker = String(row[markerCol] ?? '').trim().toLocaleUpperCase('hu');
+                if (!marker) continue;
+                const name = String(row[nameCol] ?? '').trim();
+                if (!name || !validNames.has(name)) {
+                    throw new Error('Az Együtt–külön oszlopban olyan név szerepel, amely nincs az ülésrendben: ' + (name || '(hiányzik)'));
+                }
+                if (marker !== 'D' && !/^C[1-9]\d*$/.test(marker)) {
+                    throw new Error(`Érvénytelen Együtt–külön jelölés (${name}: ${marker}). Megengedett: C1, C2, C3… vagy D.`);
+                }
+                if (labels.has(name) && labels.get(name) !== marker) {
+                    throw new Error('Ugyanahhoz a tanulóhoz eltérő Együtt–külön jelölések tartoznak: ' + name);
+                }
+                labels.set(name, marker);
+            }
+            return labels;
+        }
+
+        function teamPresentStudents() {
+            return currentStudents.filter(s => !absentStudentNames.has(s.name));
+        }
+
+        function resetTeamGroupsForFile() {
+            teamGroups = null;
+            selectedTeamName = null;
+            teamManualEdits = false;
+            document.getElementById('teamSection').style.display = 'block';
+            const present = teamPresentStudents();
+            const teamCount = document.getElementById('teamCount');
+            teamCount.max = Math.max(1, present.length);
+            teamCount.value = String(Math.min(6, Math.max(1, present.length)));
+            const toggle = document.getElementById('teamConstraintsToggle');
+            toggle.checked = togetherApartLabels.size > 0 && !togetherApartError;
+            toggle.disabled = !!togetherApartError || togetherApartLabels.size === 0;
+            teamLastUsedConstraints = toggle.checked;
+            document.getElementById('teamConstraintHint').textContent = togetherApartError
+                ? 'Hibás Együtt–külön adatok az Excelben: ' + togetherApartError + ' A csoportok enélkül is generálhatók.'
+                : togetherApartLabels.size
+                    ? `${togetherApartLabels.size} tanulónál szerepel Együtt–külön jelölés. C1, C2… = együtt; D = külön.`
+                    : 'A betöltött Excelben nincs Együtt–külön jelölés. A csoportalakítás ezek nélkül is működik.';
+            document.getElementById('teamExportButton').disabled = true;
+            document.getElementById('teamProjectionButton').disabled = true;
+            document.getElementById('teamResults').hidden = true;
+            document.getElementById('teamWarnings').hidden = true;
+            setTeamStatus('Adj meg csoportszámot, majd kattints a „Csoportok generálása” gombra.', 'info');
+        }
+
+        function invalidateTeamGroups(message) {
+            teamGroups = null;
+            selectedTeamName = null;
+            teamManualEdits = false;
+            document.getElementById('teamResults').hidden = true;
+            document.getElementById('teamWarnings').hidden = true;
+            document.getElementById('teamExportButton').disabled = true;
+            document.getElementById('teamProjectionButton').disabled = true;
+            if (document.getElementById('teamSection').style.display !== 'none') {
+                const n = teamPresentStudents().length;
+                document.getElementById('teamCount').max = Math.max(1, n);
+                if (Number(document.getElementById('teamCount').value) > n) document.getElementById('teamCount').value = String(Math.max(1, n));
+                setTeamStatus(message, 'info');
+            }
+        }
+
+        function setTeamStatus(message, type = 'info') {
+            const el = document.getElementById('teamStatus');
+            el.textContent = message;
+            el.className = 'status ' + type;
+        }
+
+        function toggleTeamConstraints(checked) {
+            if (teamManualEdits && teamGroups &&
+                !confirm('A jelölés megváltoztatásához új csoportbeosztást kell készíteni, így a kézi módosítások elvesznek. Folytatod?')) {
+                document.getElementById('teamConstraintsToggle').checked = !checked;
+                return;
+            }
+            invalidateTeamGroups('Megváltozott az Együtt–külön beállítás. Generálj új csoportbeosztást.');
+        }
+
+        // A csoportlétszám soha nem lesz az optimalizálás tárgya: a méreteket
+        // előre rögzítjük, az algoritmus kizárólag a tagokat osztja el.
+        function teamGroupSizes(n, count) {
+            return Array.from({length: count}, (_, i) => Math.floor(n / count) + (i < n % count ? 1 : 0));
+        }
+
+        function teamAssignmentScore(groups, useRules, labels, aRatio, bRatio) {
+            const together = new Map();
+            let apartConflicts = 0;
+            let abScore = 0;
+            groups.forEach((group, groupId) => {
+                let a = 0, b = 0, d = 0;
+                group.forEach(student => {
+                    const label = studentGroups.get(student.name);
+                    if (label === labels[0]) a++;
+                    if (labels.length === 2 && label === labels[1]) b++;
+                    if (useRules) {
+                        const mark = togetherApartLabels.get(student.name);
+                        if (mark === 'D') d++;
+                        if (mark && mark.startsWith('C')) {
+                            if (!together.has(mark)) together.set(mark, new Map());
+                            const m = together.get(mark);
+                            m.set(groupId, (m.get(groupId) || 0) + 1);
+                        }
+                    }
+                });
+                apartConflicts += Math.max(0, d - 1);
+                if (labels.length === 2) {
+                    abScore += Math.abs(a - aRatio * group.length) + Math.abs(b - bRatio * group.length);
+                    // Amíg mindkét jelölés jelen van, lehetőleg ne alakuljon tiszta A/B csoport.
+                    if (group.length > 1 && (!a || !b)) abScore += 2;
+                }
+            });
+            let splitTogether = 0;
+            for (const counts of together.values()) {
+                const sizes = [...counts.values()];
+                splitTogether += sizes.reduce((sum, n) => sum + n, 0) - Math.max(...sizes);
+            }
+            return splitTogether * 1000000 + apartConflicts * 10000 + abScore;
+        }
+
+        function buildStudentTeams(students, count, useRules) {
+            const sizes = teamGroupSizes(students.length, count);
+            const labels = [...new Set(students.map(s => studentGroups.get(s.name)).filter(Boolean))];
+            const totalA = students.filter(s => studentGroups.get(s.name) === labels[0]).length;
+            const totalB = labels.length > 1 ? students.filter(s => studentGroups.get(s.name) === labels[1]).length : 0;
+            const ratioA = totalA / students.length, ratioB = totalB / students.length;
+            const groupsByC = new Map();
+            if (useRules) students.forEach(student => {
+                const m = togetherApartLabels.get(student.name);
+                if (m && m.startsWith('C')) {
+                    if (!groupsByC.has(m)) groupsByC.set(m, []);
+                    groupsByC.get(m).push(student);
+                }
+            });
+            const baseBundles = [...groupsByC.values()].filter(bundle => bundle.length > 1);
+            let best = null, bestScore = Infinity;
+            // Több kiindulás és padfüggetlen páronkénti csere a csoportok között.
+            for (let attempt = 0; attempt < (students.length <= 1 ? 1 : 30); attempt++) {
+                const groups = sizes.map(() => []);
+                const remaining = [...sizes];
+                const used = new Set();
+                const bundles = shuffleItems([...baseBundles]).sort((a,b) => b.length-a.length);
+                // Először próbáljuk a C1/C2... csomagokat teljes egészükben elhelyezni.
+                // A keresés csak a csoportkapacitásokkal számol, nem változtatja meg azokat.
+                const placements = [];
+                let visited = 0;
+                function fitBundle(index) {
+                    if (++visited > 12000) return false;
+                    if (index === bundles.length) return true;
+                    const len = bundles[index].length;
+                    const choices = shuffleItems([...remaining.keys()]).sort((a,b) => {
+                        const d = Math.abs(remaining[a] - len) - Math.abs(remaining[b] - len);
+                        return d;
+                    });
+                    const seen = new Set();
+                    for (const id of choices) {
+                        if (remaining[id] < len || seen.has(remaining[id])) continue;
+                        seen.add(remaining[id]);
+                        remaining[id] -= len;
+                        placements[index] = id;
+                        if (fitBundle(index+1)) return true;
+                        remaining[id] += len;
+                    }
+                    return false;
+                }
+                const packed = fitBundle(0);
+                if (packed) {
+                    bundles.forEach((bundle,i) => {
+                        const id = placements[i];
+                        groups[id].push(...bundle);
+                        bundle.forEach(s => used.add(s.name));
+                    });
+                } else {
+                    // Nem minden C-csomag fér el egyben; a lehető legkevesebb darabra bontjuk.
+                    // A csoportok létszáma ekkor is pontosan az előírt marad.
+                    bundles.forEach(bundle => {
+                        const left = shuffleItems([...bundle]);
+                        while (left.length) {
+                            const capacities = groups.map((g,i) => ({i, room: sizes[i]-g.length}))
+                                .filter(item => item.room > 0).sort((a,b) => b.room-a.room);
+                            const id = capacities[0].i;
+                            const take = Math.min(capacities[0].room, left.length);
+                            const part = left.splice(0,take);
+                            groups[id].push(...part);
+                            part.forEach(s => used.add(s.name));
+                        }
+                    });
+                }
+                const remainingStudents = shuffleItems(students.filter(s => !used.has(s.name)));
+                const dStudents = useRules
+                    ? remainingStudents.filter(s => togetherApartLabels.get(s.name) === 'D') : [];
+                const otherStudents = remainingStudents.filter(s => !dStudents.includes(s));
+                function addStudent(s, preferApart) {
+                    const options = groups.map((g,i) => ({g,i,room:sizes[i]-g.length})).filter(x => x.room > 0);
+                    const measure = ({g, room}) => {
+                        const ds = g.filter(t => togetherApartLabels.get(t.name) === 'D').length;
+                        const a = g.filter(t => studentGroups.get(t.name) === labels[0]).length;
+                        const b = g.filter(t => labels.length > 1 && studentGroups.get(t.name) === labels[1]).length;
+                        const nextA = a + (studentGroups.get(s.name) === labels[0] ? 1 : 0);
+                        const nextB = b + (labels.length > 1 && studentGroups.get(s.name) === labels[1] ? 1 : 0);
+                        return (preferApart ? ds * 1000 : 0) +
+                            (labels.length === 2 ? Math.abs(nextA - ratioA*(g.length+1)) + Math.abs(nextB - ratioB*(g.length+1)) : 0) - room*.002;
+                    };
+                    shuffleItems(options).sort((a,b) => measure(a) - measure(b));
+                    options[0].g.push(s);
+                }
+                dStudents.forEach(s => addStudent(s,true));
+                otherStudents.forEach(s => addStudent(s,false));
+                let score = teamAssignmentScore(groups, useRules, labels, ratioA, ratioB);
+                // Csak cserékkel javítunk: az előírt csoportlétszámok így állandók.
+                for (let step = 0; step < 18; step++) {
+                    let pick = null, improved = score;
+                    for (let i = 0; i < groups.length; i++) for (let j = i+1; j < groups.length; j++) {
+                        for (let a = 0; a < groups[i].length; a++) for (let b = 0; b < groups[j].length; b++) {
+                            [groups[i][a], groups[j][b]] = [groups[j][b],groups[i][a]];
+                            const candidate = teamAssignmentScore(groups, useRules, labels, ratioA, ratioB);
+                            [groups[i][a], groups[j][b]] = [groups[j][b],groups[i][a]];
+                            if (candidate + 1e-8 < improved) {improved = candidate; pick = [i,j,a,b];}
+                        }
+                    }
+                    if (!pick) break;
+                    const [i,j,a,b] = pick;
+                    [groups[i][a],groups[j][b]] = [groups[j][b],groups[i][a]];
+                    score = improved;
+                }
+                if (score < bestScore) {
+                    bestScore = score;
+                    best = groups.map(g => [...g]);
+                }
+                if (bestScore <= 0) break;
+            }
+            return best;
+        }
+
+        function generateTeamGroups() {
+            const students = teamPresentStudents();
+            const input = document.getElementById('teamCount');
+            const count = Number(input.value);
+            if (!students.length) {
+                setTeamStatus('Nincs jelenlévő tanuló. Előbb állítsd be a jelenlétet.', 'error');
+                return;
+            }
+            if (!Number.isInteger(count) || count < 1 || count > students.length) {
+                setTeamStatus(`A csoportok száma 1 és ${students.length} közötti egész szám legyen.`, 'error');
+                input.focus();
+                return;
+            }
+            if (teamGroups && teamManualEdits &&
+                !confirm('A csoportok újragenerálása felülírja a kézzel módosított beosztást. Folytatod?')) return;
+            const useRules = document.getElementById('teamConstraintsToggle').checked && !togetherApartError;
+            try {
+                const groups = buildStudentTeams(students, count, useRules);
+                if (!groups || groups.flat().length !== students.length ||
+                    new Set(groups.flat().map(s=>s.name)).size !== students.length) {
+                    throw new Error('Nem sikerült teljes, egyedi csoportbeosztást létrehozni.');
+                }
+                teamGroups = groups;
+                teamLastUsedConstraints = useRules;
+                selectedTeamName = null;
+                teamManualEdits = false;
+                setTeamStatus(`${students.length} tanulóból ${count} csoport készült. A csoportok kézzel módosíthatók.`, 'success');
+                renderTeamGroups();
+            } catch (err) {
+                setTeamStatus('Hiba a csoportalakításkor: ' + err.message, 'error');
+            }
+        }
+
+        function teamLocation(name) {
+            if (!teamGroups) return null;
+            for (let i=0; i<teamGroups.length; i++) {
+                const j=teamGroups[i].findIndex(s=>s.name===name);
+                if (j>=0) return {i,j};
+            }
+            return null;
+        }
+
+        function chooseTeamStudent(name) {
+            if (selectedTeamName === name) selectedTeamName = null;
+            else if (selectedTeamName && teamLocation(selectedTeamName)) {
+                swapTeamStudents(selectedTeamName,name);
+                return;
+            } else selectedTeamName = name;
+            renderTeamGroups();
+        }
+
+        function swapTeamStudents(a,b) {
+            const l1=teamLocation(a),l2=teamLocation(b);
+            if (!l1 || !l2) return;
+            if (l1.i !== l2.i) {
+                [teamGroups[l1.i][l1.j],teamGroups[l2.i][l2.j]] =
+                    [teamGroups[l2.i][l2.j],teamGroups[l1.i][l1.j]];
+                teamManualEdits = true;
+            }
+            selectedTeamName = null;
+            renderTeamGroups();
+        }
+
+        function moveTeamStudent(name,targetIndex) {
+            const source=teamLocation(name);
+            if (!source || targetIndex===source.i || !teamGroups[targetIndex]) return;
+            const [student]=teamGroups[source.i].splice(source.j,1);
+            teamGroups[targetIndex].push(student);
+            selectedTeamName = null;
+            teamManualEdits = true;
+            renderTeamGroups();
+        }
+
+        function moveSelectedTeamStudent() {
+            if (!selectedTeamName) return;
+            const to = Number(document.getElementById('teamTargetSelect').value);
+            moveTeamStudent(selectedTeamName,to);
+        }
+
+        function teamWarningMessages() {
+            if (!teamGroups) return [];
+            const messages = [];
+            const sizes = teamGroups.map(g=>g.length);
+            if (Math.max(...sizes)-Math.min(...sizes)>1) {
+                messages.push('A kézi módosítás miatt a csoportlétszámok nem egyenletesek: ' + sizes.join(', ') + ' fő.');
+            }
+            if (teamLastUsedConstraints) {
+                const cGroups = new Map();
+                let totalD=0;
+                teamGroups.forEach((group,i)=>group.forEach(s=>{
+                    const mark=togetherApartLabels.get(s.name);
+                    if (mark==='D') totalD++;
+                    if (mark && mark.startsWith('C')) {
+                        if (!cGroups.has(mark)) cGroups.set(mark,new Set());
+                        cGroups.get(mark).add(i);
+                    }
+                }));
+                const desired = teamGroupSizes(teamGroups.flat().length,teamGroups.length);
+                const maxSize = Math.max(...desired);
+                const counts = new Map();
+                teamGroups.flat().forEach(s=>{
+                    const mark=togetherApartLabels.get(s.name);
+                    if (mark && mark.startsWith('C')) counts.set(mark,(counts.get(mark)||0)+1);
+                });
+                for (const [label,count] of counts) {
+                    if (count > maxSize) messages.push(`${label}: ${count} tanuló tartozik egy összevonandó társasághoz, de a legnagyobb csoport csak ${maxSize} fős lehet.`);
+                    if (cGroups.get(label).size > 1) messages.push(`${label}: az együtt jelölt tanulók ${cGroups.get(label).size} különböző csoportba kerültek.`);
+                }
+                if (totalD > teamGroups.length) messages.push(`${totalD} darab D jelölésű tanuló van, de csak ${teamGroups.length} csoport: nem helyezhetők el mind külön.`);
+                teamGroups.forEach((g,i)=>{
+                    const d=g.filter(s=>togetherApartLabels.get(s.name)==='D').length;
+                    if (d>1) messages.push(`${i+1}. csoport: ${d} D jelölésű tanuló került össze.`);
+                });
+            }
+            const labels = [...new Set(teamGroups.flat().map(s=>studentGroups.get(s.name)).filter(Boolean))];
+            if (labels.length === 2 && teamGroups.some(g => g.length>1 &&
+                    (!g.some(s=>studentGroups.get(s.name)===labels[0]) || !g.some(s=>studentGroups.get(s.name)===labels[1])))) {
+                messages.push('Nem mindegyik csoport tartalmaz mindkét A/B jelölésből. Ez a létszámokból vagy az egyéb megkötésekből is következhet.');
+            }
+            return [...new Set(messages)];
+        }
+
+        function renderTeamGroups() {
+            if (!teamGroups) return;
+            document.getElementById('teamResults').hidden = false;
+            document.getElementById('teamExportButton').disabled = false;
+            document.getElementById('teamProjectionButton').disabled = false;
+            const cards=document.getElementById('teamCards');
+            cards.innerHTML='';
+            const labels=[...new Set(teamGroups.flat().map(s=>studentGroups.get(s.name)).filter(Boolean))];
+            teamGroups.forEach((group,i)=>{
+                const card=document.createElement('article');
+                card.className='team-card';
+                const h3=document.createElement('h3');
+                h3.textContent=`${i+1}. csoport`;
+                card.appendChild(h3);
+                const a=group.filter(s=>studentGroups.get(s.name)===labels[0]).length;
+                const b=labels.length>1 ? group.filter(s=>studentGroups.get(s.name)===labels[1]).length : 0;
+                const summary=document.createElement('div');
+                summary.className='team-summary';
+                summary.textContent=`${group.length} fő` + (labels.length===2 ? ` · ${labels[0]}: ${a}, ${labels[1]}: ${b}` : '');
+                card.appendChild(summary);
+                const ul=document.createElement('ul');
+                ul.className='team-members';
+                group.forEach(student=>{
+                    const li=document.createElement('li');
+                    const button=document.createElement('button');
+                    button.type='button';
+                    const label=studentGroups.get(student.name);
+                    button.className='team-student' + (label && label===labels[0]?' group-a':label && label===labels[1]?' group-b':'') +
+                        (student.name===selectedTeamName?' selected':'');
+                    button.textContent=student.name
+                    button.setAttribute('aria-pressed',String(student.name===selectedTeamName));
+                    button.title='Kiválasztás; egy másik névre kattintva csere';
+                    button.onclick=()=>chooseTeamStudent(student.name);
+                    button.draggable=true;
+                    button.addEventListener('dragstart',e=>{
+                        draggedTeamName=student.name;
+                        if (e.dataTransfer) e.dataTransfer.setData('text/plain',student.name);
+                    });
+                    button.addEventListener('dragend',()=>{ draggedTeamName=null; });
+                    button.addEventListener('dragover',e=>e.preventDefault());
+                    button.addEventListener('drop',e=>{
+                        e.preventDefault(); e.stopPropagation();
+                        if (draggedTeamName && draggedTeamName!==student.name) swapTeamStudents(draggedTeamName,student.name);
+                        draggedTeamName=null;
+                    });
+                    li.appendChild(button);
+                    ul.appendChild(li);
+                });
+                card.appendChild(ul);
+                card.addEventListener('dragover',e=>{e.preventDefault();card.classList.add('drag-over');});
+                card.addEventListener('dragleave',()=>card.classList.remove('drag-over'));
+                card.addEventListener('drop',e=>{
+                    e.preventDefault(); card.classList.remove('drag-over');
+                    if (draggedTeamName) moveTeamStudent(draggedTeamName,i);
+                    draggedTeamName=null;
+                });
+                cards.appendChild(card);
+            });
+            const target=document.getElementById('teamTargetSelect');
+            const existing=target.value;
+            target.innerHTML='';
+            teamGroups.forEach((_,i)=>{
+                const option=document.createElement('option');
+                option.value=String(i); option.textContent=`${i+1}. csoport`;
+                target.appendChild(option);
+            });
+            const location=selectedTeamName ? teamLocation(selectedTeamName) : null;
+            if (location) target.value=existing && Number(existing)!==location.i ? existing : String((location.i+1)%teamGroups.length);
+            document.getElementById('teamSelectedStudent').textContent=selectedTeamName
+                ? 'Kiválasztva: '+selectedTeamName : 'Nincs kiválasztott tanuló.';
+            document.getElementById('teamMoveButton').disabled=!selectedTeamName || teamGroups.length<2;
+            const messages=teamWarningMessages();
+            const warning=document.getElementById('teamWarnings');
+            warning.innerHTML='';
+            if (messages.length) {
+                messages.forEach(message=>{const p=document.createElement('p');p.textContent='⚠ '+message;warning.appendChild(p);});
+                warning.hidden=false;
+            } else {
+                warning.hidden=true;
+            }
+            if (teamManualEdits) setTeamStatus('A csoportbeosztást kézzel módosítottad. Az Excel-export az aktuális állapotot menti.', 'info');
+        }
+
+        function getTeamProjectionColumnCount(count) {
+            const width = window.innerWidth;
+            if (count <= 2) return count;
+            if (width < 600) {
+                if (count <= 4) return 2;
+                return count <= 6 ? 2 : 3;
+            }
+            if (count <= 4) return count;
+            if (count <= 6) return 3;
+            if (count === 9) return 3;
+            if (count <= 12) return 4;
+            if (count <= 20) return 5;
+            return 6;
+        }
+
+        function openTeamProjection() {
+            if (!teamGroups || !teamGroups.length) {
+                alert('Előbb készíts csoportbeosztást!');
+                return;
+            }
+            const previousFocus = document.activeElement;
+            const previousBodyOverflow = document.body.style.overflow;
+            const overlay = document.createElement('div');
+            overlay.className = 'projection-overlay team-projection-overlay';
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-modal', 'true');
+            overlay.setAttribute('aria-labelledby', 'teamProjectionHeading');
+            overlay.style.visibility = 'hidden';
+
+            const header = document.createElement('div');
+            header.className = 'team-projection-header';
+            const headings = document.createElement('div');
+            headings.className = 'team-projection-headings';
+            const title = document.createElement('h1');
+            title.id = 'teamProjectionHeading';
+            title.className = 'projection-title';
+            title.textContent = 'Csoportbeosztás';
+            const subtitle = document.createElement('span');
+            subtitle.className = 'projection-subtitle';
+            subtitle.textContent = `${teamGroups.length} csoport`;
+            headings.appendChild(title);
+            headings.appendChild(subtitle);
+            header.appendChild(headings);
+
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'projection-close';
+            closeBtn.textContent = '✕ Bezárás';
+            header.appendChild(closeBtn);
+
+            const grid = document.createElement('div');
+            grid.className = 'team-projection-grid';
+            teamGroups.forEach((group, i) => {
+                const card = document.createElement('article');
+                card.className = 'team-projection-card';
+                const h3 = document.createElement('h3');
+                h3.textContent = `${i + 1}. csoport`;
+                card.appendChild(h3);
+                const summary = document.createElement('div');
+                summary.className = 'team-projection-summary';
+                summary.textContent = `${group.length} fő`;
+                card.appendChild(summary);
+                const ul = document.createElement('ul');
+                ul.className = 'team-projection-members';
+                group.forEach(student => {
+                    const li = document.createElement('li');
+                    li.className = 'team-projection-student';
+                    li.textContent = student.name; // A/B és Együtt–külön adatok sosem láthatók a vetítésben.
+                    ul.appendChild(li);
+                });
+                card.appendChild(ul);
+                grid.appendChild(card);
+            });
+            overlay.appendChild(header);
+            overlay.appendChild(grid);
+
+            // A vetítési betűméretet a tényleges képernyő és a létrejött csoportok
+            // szerint számoljuk, nem állandó px/vw mérettel. Nincs scroll vagy levágás.
+            function fits() {
+                const tolerance = 1.5;
+                for (const el of [grid, ...grid.querySelectorAll('.team-projection-card, .team-projection-members, .team-projection-student')]) {
+                    if (el.scrollHeight > el.clientHeight + tolerance ||
+                        el.scrollWidth > el.clientWidth + tolerance) return false;
+                }
+                return true;
+            }
+            function applySize(fontSize) {
+                grid.style.setProperty('--team-name-font', fontSize + 'px');
+                grid.style.setProperty('--team-heading-font', Math.max(10, Math.min(27, fontSize * 1.1)) + 'px');
+                grid.style.setProperty('--team-summary-font', Math.max(9, fontSize * 0.72) + 'px');
+                grid.style.setProperty('--team-card-pad', Math.max(3, Math.min(12, fontSize * 0.39)) + 'px');
+                grid.style.setProperty('--team-name-pad', Math.max(2, Math.min(12, fontSize * 0.4)) + 'px');
+                grid.style.setProperty('--team-member-gap', Math.max(1, Math.min(6, fontSize * 0.19)) + 'px');
+                grid.style.setProperty('--team-summary-gap', Math.max(1, Math.min(6, fontSize * 0.17)) + 'px');
+                grid.style.setProperty('--team-gap', Math.max(3, Math.min(13, fontSize * 0.48)) + 'px');
+            }
+            function fitProjection() {
+                if (!document.body.contains(overlay)) return;
+                const cols = getTeamProjectionColumnCount(teamGroups.length);
+                grid.style.setProperty('--projection-columns', String(cols));
+                grid.style.setProperty('--projection-rows', String(Math.ceil(teamGroups.length / cols)));
+                // A lehetséges legnagyobb, még teljesen elférő betűméretet választjuk.
+                let low = 8, high = 27;
+                applySize(low);
+                for (let step = 0; step < 10; step++) {
+                    const middle = (low + high) / 2;
+                    applySize(middle);
+                    if (fits()) low = middle;
+                    else high = middle;
+                }
+                applySize(low);
+            }
+            let fitFrame = null;
+            function scheduleFit() {
+                if (fitFrame !== null) cancelAnimationFrame(fitFrame);
+                fitFrame = requestAnimationFrame(() => {
+                    fitFrame = null;
+                    fitProjection();
+                    overlay.style.visibility = '';
+                });
+            }
+            function closeProjection() {
+                if (fitFrame !== null) cancelAnimationFrame(fitFrame);
+                if (document.body.contains(overlay)) document.body.removeChild(overlay);
+                document.body.style.overflow = previousBodyOverflow;
+                window.removeEventListener('resize', scheduleFit);
+                document.removeEventListener('keydown', handleKeydown);
+                if (previousFocus && previousFocus.isConnected && typeof previousFocus.focus === 'function') previousFocus.focus();
+            }
+            function handleKeydown(e) {
+                if (e.key === 'Escape') closeProjection();
+            }
+            closeBtn.onclick = closeProjection;
+            document.body.style.overflow = 'hidden';
+            document.body.appendChild(overlay);
+            window.addEventListener('resize', scheduleFit);
+            document.addEventListener('keydown', handleKeydown);
+            scheduleFit();
+            closeBtn.focus();
+        }
+
+        async function downloadTeamGroups() {
+            if (!teamGroups) return;
+            try {
+                const workbook=XLSX.utils.book_new();
+                const columns=teamGroups.map((g,i)=>[`${i+1}. csoport`,...g.map(s=>s.name)]);
+                const rows=Array.from({length:Math.max(...columns.map(c=>c.length))},(_,r)=>columns.map(c=>c[r]||''));
+                const grid=XLSX.utils.aoa_to_sheet(rows);
+                grid['!cols']=teamGroups.map(()=>({width:30}));
+                XLSX.utils.book_append_sheet(workbook,grid,'Csoportok');
+                const detailed=[['Csoport','Tanuló','A/B jelölés']];
+                teamGroups.forEach((group,i)=>group.forEach(student=>detailed.push([
+                    `${i+1}. csoport`,student.name,studentGroups.get(student.name)||''
+                ])));
+                const list=XLSX.utils.aoa_to_sheet(detailed);
+                list['!cols']=[{width:18},{width:30},{width:16}];
+                XLSX.utils.book_append_sheet(workbook,list,'Névlista');
+                const day=new Date().toLocaleDateString('sv-SE');
+                await XLSX.writeFile(workbook,`csoportbeosztas_${day}.xlsx`);
+                setTeamStatus('A csoportbeosztás Excel-fájlba mentve.', 'success');
+            } catch(err) {
+                setTeamStatus('Nem sikerült az Excel-export: '+err.message, 'error');
+            }
         }
 
         function shuffleItems(items) {
